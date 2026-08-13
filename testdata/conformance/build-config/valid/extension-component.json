@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "v1beta",
+  "settings": {
+    "compression": {
+      "type": "zstd"
+    }
+  },
+  "components": {
+    "x-runbooks": ["/runbooks/**"]
+  }
+}

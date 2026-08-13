@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ocidoc.org/schema/artifact-config-v1beta.json",
+  "schemaVersion": "v1beta",
+  "components": {
+    "documentation": {
+      "entrypoint": "README.md"
+    },
+    "license": {
+      "entrypoint": "LICENSE"
+    },
+    "security": {
+      "entrypoint": "SECURITY.md"
+    },
+    "changelog": {
+      "entrypoint": "CHANGELOG.md"
+    }
+  }
+}

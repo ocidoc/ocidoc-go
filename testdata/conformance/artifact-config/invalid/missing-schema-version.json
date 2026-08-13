@@ -1,0 +1,7 @@
+{
+  "components": {
+    "documentation": {
+      "entrypoint": "README.md"
+    }
+  }
+}

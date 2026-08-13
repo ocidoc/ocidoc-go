@@ -1,0 +1,46 @@
+schema: schema/build-config-v1beta.json
+
+mod2schema:
+  module: .
+  package: github.com/ocidoc/ocidoc-go/spec
+  type: BuildConfig
+  key_namer: none
+
+merge:
+  patches:
+    - file: schema/patches/build-config-v1beta.json
+      op:
+        node: merge
+
+schema2doc:
+  title: OCIDoc build configuration (v1beta)
+  template: table
+  mode: all
+  format: yaml
+  output: docs/build-config-v1beta.md
+
+schema2yaml:
+  mode: all
+  output: docs/build-config-v1beta.example.yaml
+
+---
+schema: schema/artifact-config-v1beta.json
+
+mod2schema:
+  module: .
+  package: github.com/ocidoc/ocidoc-go/spec
+  type: ArtifactConfig
+  key_namer: none
+
+merge:
+  patches:
+    - file: schema/patches/artifact-config-v1beta.json
+      op:
+        node: merge
+
+schema2doc:
+  title: OCIDoc artifact configuration (v1beta)
+  template: table
+  mode: all
+  format: json
+  output: docs/artifact-config-v1beta.md

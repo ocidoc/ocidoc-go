@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "v1beta",
+  "settings": {
+    "strict": false,
+    "compression": {
+      "type": "gzip",
+      "level": 6
+    }
+  },
+  "document": {
+    "id": "default",
+    "language": "en",
+    "variant": "default"
+  },
+  "ignore": [
+    "/.git/**",
+    "/.hg/**",
+    "/.svn/**",
+    "/.idea/**",
+    "/.vscode/**",
+    "/**/.DS_Store",
+    "/**/Thumbs.db"
+  ],
+  "entrypoints": {
+    "documentation": "/README.md",
+    "security": "/SECURITY.md"
+  },
+  "annotations": {
+    "org.opencontainers.image.title": "Project documentation",
+    "org.opencontainers.image.version": "1.2.3"
+  },
+  "components": {
+    "documentation": ["/README", "/README.*", "/docs/**"],
+    "security": ["/SECURITY.md"]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "ArtifactConfig": {
+      "additionalProperties": false,
+      "description": "ArtifactConfig is the OCIDoc artifact config blob (ConfigMediaType).",
+      "properties": {
+        "$schema": {
+          "const": "https://ocidoc.org/schema/artifact-config-v1beta.json",
+          "description": "Schema, when set, must equal this format's canonical JSON Schema identifier.\nIt is optional: a reader must not reject a config that omits it.",
+          "examples": [
+            "https://ocidoc.org/schema/artifact-config-v1beta.json"
+          ],
+          "type": "string"
+        },
+        "components": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ComponentConfig"
+          },
+          "description": "Components maps each component name present in the artifact to its per-component config.\nAt least one component is required, and it must match the manifest's own set of component layers exactly.",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
+          },
+          "type": "object"
+        },
+        "schemaVersion": {
+          "default": "v1beta",
+          "description": "SchemaVersion is the artifact config format version.\nThe only currently supported value is \"v1beta\".",
+          "enum": [
+            "v1beta"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "components",
+        "schemaVersion"
+      ],
+      "type": "object"
+    },
+    "ComponentConfig": {
+      "additionalProperties": false,
+      "description": "ComponentConfig is the per-component entry in ArtifactConfig.",
+      "properties": {
+        "entrypoint": {
+          "description": "Entrypoint is this component's primary file, as a bundle-relative path (no leading \"/\", no \"..\" segments).\nOmit it when the component has no designated primary file.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://ocidoc.org/schema/artifact-config-v1beta.json",
+  "$ref": "#/$defs/ArtifactConfig",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

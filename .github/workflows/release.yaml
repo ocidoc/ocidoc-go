@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - uses: rvben/rumdl@v0
+
+      - name: Check
+        run: make ci test-race fuzz FUZZ_TIME=10s
+
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Test
+        run: go test ./...
+
+  publish:
+    needs: [gate, windows-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract changelog
+        run: make release-notes > release.md
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          bodyFile: release.md
+
+      - name: Request pkg.go.dev reindex
+        env:
+          MODULE: github.com/ocidoc/ocidoc-go
+          VERSION: ${{ github.ref_name }}
+        run: >-
+          curl -sSfX POST --retry 3 --retry-delay 2
+          "https://pkg.go.dev/fetch/${MODULE}@${VERSION}"

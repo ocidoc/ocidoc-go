@@ -1,0 +1,345 @@
+<!-- Automatically generated file, do not modify! -->
+
+# OCIDoc build configuration (v1beta)
+
+* Source file: [`schema/build-config-v1beta.json`](schema/build-config-v1beta.json)
+* Schema identifier: `https://ocidoc.org/schema/build-config-v1beta.json`
+* JSON Schema version: `https://json-schema.org/draft/2020-12/schema`
+* Version support: `supported (2020-12)`
+* Root reference: `#/$defs/BuildConfig`
+
+## Contents
+
+* [BuildConfig](#buildconfig)
+  * [BuildSettings](#buildsettings)
+    * [CompressionSettings](#compressionsettings)
+  * [DocumentSettings](#documentsettings)
+* [Example yaml document](#example-yaml-document)
+
+## BuildConfig
+
+BuildConfig is the writer input read from ocidoc.yaml/ocidoc.json or an
+explicitly selected configuration file.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Properties | 7 |
+| Additional properties | boolean schema=false |
+
+### BuildConfig.schemaVersion
+
+Key: `schemaVersion`
+
+SchemaVersion is the build config format version. The only currently supported
+value is "v1beta".
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | yes |
+| Default | `v1beta` |
+| Enum | `v1beta` |
+
+### BuildConfig.components
+
+Key: `components`
+
+Components maps each component name to the path rules that select its files from
+the source tree. At least one component with at least one rule is required. A
+name is either one of the standard component types (documentation, license,
+changelog, release-notes, security, contributing, code-of-conduct, support) or a
+custom "x-"-prefixed extension name.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Required | yes |
+| Additional properties type | `array` |
+| Additional properties constraints | `minItems=1` |
+| Property names constraints | `pattern=^(?:documentation\|license\|changelog\|release-notes\|security\|contributing\|code-of-conduct\|support\|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$` |
+| Constraints | `minProperties=1` |
+
+### BuildConfig.annotations
+
+Key: `annotations`
+
+Annotations adds custom key/value pairs to the built artifact's root OCI
+manifest. Keys starting with "org.ocidoc." are reserved for OCIDoc itself and
+rejected here.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Required | no |
+| Additional properties type | `string` |
+
+### BuildConfig.DocumentSettings
+
+Key: `document`
+
+Document sets the built artifact's document identity (id, language, variant).
+Omit it to build the default, unlocalized document.
+
+| Attribute | Value |
+| --- | --- |
+| Required | no |
+| Reference | [`DocumentSettings`](#documentsettings) (`#/$defs/DocumentSettings`) |
+
+### BuildConfig.entrypoints
+
+Key: `entrypoints`
+
+Entrypoints overrides the automatically detected primary file for one or more
+components, keyed by component name. A component not listed here falls back to
+automatic detection (for example, README.md for the documentation component).
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Required | no |
+| Additional properties type | `string` |
+| Property names constraints | `pattern=^(?:documentation\|license\|changelog\|release-notes\|security\|contributing\|code-of-conduct\|support\|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$` |
+
+### BuildConfig.ignore
+
+Key: `ignore`
+
+Ignore lists path rules excluded from every component, applied after component
+matching. A rule prefixed with "!" is a negation: it restores a path an earlier
+ignore rule (here or in a component's own rules) would otherwise have excluded.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `array` |
+| Required | no |
+| Items type | `string` |
+
+### BuildConfig.BuildSettings
+
+Key: `settings`
+
+Settings controls build-time behavior that does not change the resulting
+artifact's logical identity: strict mode and component compression. Omit it to
+use the documented defaults (strict mode off, gzip at level 6).
+
+| Attribute | Value |
+| --- | --- |
+| Required | no |
+| Reference | [`BuildSettings`](#buildsettings) (`#/$defs/BuildSettings`) |
+
+## BuildSettings
+
+BuildSettings holds writer-behavior options that are not part of the resulting
+artifact's identity.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Properties | 2 |
+| Additional properties | boolean schema=false |
+
+### BuildSettings.CompressionSettings
+
+Key: `compression`
+
+Path: [`settings`](#buildconfigbuildsettings).`compression`
+
+Compression selects how OCIDoc component layers are compressed. Omit it to use
+the default: gzip at level 6.
+
+| Attribute | Value |
+| --- | --- |
+| Required | no |
+| Reference | [`CompressionSettings`](#compressionsettings) (`#/$defs/CompressionSettings`) |
+
+### BuildSettings.strict
+
+Key: `strict`
+
+Path: [`settings`](#buildconfigbuildsettings).`strict`
+
+Strict rejects a build where a declared component matches no files in the source
+tree, instead of only warning about it.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `boolean` |
+| Required | no |
+| Default | `false` |
+
+## CompressionSettings
+
+CompressionSettings selects the component layer compression algorithm and, for
+gzip, its level.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Properties | 2 |
+| Additional properties | boolean schema=false |
+
+### CompressionSettings.type
+
+Key: `type`
+
+Path: [`settings`](#buildconfigbuildsettings).[`compression`](#buildsettingscompressionsettings).`type`
+
+Type selects the compression algorithm used for component layers. Gzip is the
+default and has the broadest registry client support; zstd typically compresses
+faster and smaller at a comparable level, at the cost of less universal tooling
+support.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | yes |
+| Default | `gzip` |
+| Enum | `gzip`, `zstd` |
+
+### CompressionSettings.level
+
+Key: `level`
+
+Path: [`settings`](#buildconfigbuildsettings).[`compression`](#buildsettingscompressionsettings).`level`
+
+Level controls the compression level used by the selected compressor. Higher
+levels may reduce artifact size at the cost of additional CPU time during build.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `integer` |
+| Required | no |
+| Default | `6` |
+| Constraints | `minimum=0`; `maximum=9` |
+
+## DocumentSettings
+
+DocumentSettings sets the document identity tuple (see AnnotationDocumentID and
+related constants) for the artifact being built.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Properties | 3 |
+| Additional properties | boolean schema=false |
+
+### DocumentSettings.id
+
+Key: `id`
+
+Path: [`document`](#buildconfigdocumentsettings).`id`
+
+ID identifies this artifact among multiple documentation artifacts that may be
+attached to the same subject.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | no |
+| Default | `default` |
+
+### DocumentSettings.language
+
+Key: `language`
+
+Path: [`document`](#buildconfigdocumentsettings).`language`
+
+Language identifies the document's language, when relevant to distinguishing it
+from other documents attached to the same subject. No particular tag format is
+required or enforced; omit it for a language-neutral document.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | no |
+
+### DocumentSettings.variant
+
+Key: `variant`
+
+Path: [`document`](#buildconfigdocumentsettings).`variant`
+
+Variant distinguishes multiple documents that share the same ID and language,
+for example "operator" versus "user". Omit it when only one variant of this
+document exists.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | no |
+
+## Example yaml document
+
+```yaml
+# Annotations adds custom key/value pairs to the built artifact's root OCI manifest.
+# Keys starting with "org.ocidoc." are reserved for OCIDoc itself and rejected here.
+annotations: {}
+# Components maps each component name to the path rules that select its files from the source tree.
+# At least one component with at least one rule is required.
+# A name is either one of the standard component types
+# (documentation, license, changelog, release-notes, security, contributing, code-of-conduct, support)
+# or a custom "x-"-prefixed extension name.
+components: {}
+# Document sets the built artifact's document identity (id, language, variant).
+# Omit it to build the default, unlocalized document.
+document:
+  # ID identifies this artifact among multiple documentation artifacts
+  # that may be attached to the same subject.
+  # Default: default
+  id: default
+  # Language identifies the document's language,
+  # when relevant to distinguishing it from other documents attached to the same subject.
+  # No particular tag format is required or enforced;
+  # omit it for a language-neutral document.
+  language: <string>
+  # Variant distinguishes multiple documents that share the same ID and language,
+  # for example "operator" versus "user".
+  # Omit it when only one variant of this document exists.
+  variant: <string>
+# Entrypoints overrides the automatically detected primary file for one or more components, keyed by component name.
+# A component not listed here falls back to automatic detection
+# (for example, README.md for the documentation component).
+entrypoints: {}
+# Ignore lists path rules excluded from every component, applied after component matching.
+# A rule prefixed with "!" is a negation: it restores a path an earlier ignore rule
+# (here or in a component's own rules) would otherwise have excluded.
+ignore:
+  - <string>
+# SchemaVersion is the build config format version.
+# The only currently supported value is "v1beta".
+# Default: v1beta
+# Allowed values: v1beta
+schemaVersion: v1beta
+# Settings controls build-time behavior that does not change the resulting artifact's logical identity:
+# strict mode and component compression.
+# Omit it to use the documented defaults (strict mode off, gzip at level 6).
+settings:
+  # Compression selects how OCIDoc component layers are compressed.
+  # Omit it to use the default: gzip at level 6.
+  compression:
+    # Level controls the compression level used by the selected compressor.
+    # Higher levels may reduce artifact size at the cost of additional CPU time during build.
+    # Default: 6
+    level: 6
+    # Type selects the compression algorithm used for component layers.
+    # Gzip is the default and has the broadest registry client support;
+    # zstd typically compresses faster and smaller at a comparable level,
+    # at the cost of less universal tooling support.
+    # Default: gzip
+    # Allowed values: gzip, zstd
+    type: gzip
+  # Strict rejects a build where a declared component matches no files in the source tree,
+  # instead of only warning about it.
+  # Default: false
+  strict: false
+```
+
+---
+
+> Generated with
+> [schemadoc](https://github.com/woozymasta/schemadoc)
+> version `v0.5.2`
+> commit `765723d161ffc216ae81de59c47b676e3d5c25f5`
+
+<!-- Automatically generated file, do not modify! -->

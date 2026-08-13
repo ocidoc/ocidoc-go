@@ -1,0 +1,113 @@
+<!-- Automatically generated file, do not modify! -->
+
+# OCIDoc artifact configuration (v1beta)
+
+* Source file: [`schema/artifact-config-v1beta.json`](schema/artifact-config-v1beta.json)
+* Schema identifier: `https://ocidoc.org/schema/artifact-config-v1beta.json`
+* JSON Schema version: `https://json-schema.org/draft/2020-12/schema`
+* Version support: `supported (2020-12)`
+* Root reference: `#/$defs/ArtifactConfig`
+
+## Contents
+
+* [ArtifactConfig](#artifactconfig)
+  * [ComponentConfig](#componentconfig)
+* [Example json document](#example-json-document)
+
+## ArtifactConfig
+
+ArtifactConfig is the OCIDoc artifact config blob (ConfigMediaType).
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Properties | 3 |
+| Additional properties | boolean schema=false |
+
+### ArtifactConfig.components
+
+Key: `components`
+
+Components maps each component name present in the artifact to its per-component
+config. At least one component is required, and it must match the manifest's own
+set of component layers exactly.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Required | yes |
+| Additional properties reference | [`ComponentConfig`](#componentconfig) (`#/$defs/ComponentConfig`) |
+| Property names constraints | `pattern=^(?:documentation\|license\|changelog\|release-notes\|security\|contributing\|code-of-conduct\|support\|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$` |
+| Constraints | `minProperties=1` |
+
+### ArtifactConfig.schemaVersion
+
+Key: `schemaVersion`
+
+SchemaVersion is the artifact config format version. The only currently
+supported value is "v1beta".
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | yes |
+| Default | `v1beta` |
+| Enum | `v1beta` |
+
+### ArtifactConfig.$schema
+
+Key: `$schema`
+
+Schema, when set, must equal this format's canonical JSON Schema identifier. It
+is optional: a reader must not reject a config that omits it.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | no |
+| Const | `https://ocidoc.org/schema/artifact-config-v1beta.json` |
+| Examples | `https://ocidoc.org/schema/artifact-config-v1beta.json` |
+
+## ComponentConfig
+
+ComponentConfig is the per-component entry in ArtifactConfig.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `object` |
+| Properties | 1 |
+| Additional properties | boolean schema=false |
+
+### ComponentConfig.entrypoint
+
+Key: `entrypoint`
+
+Path: [`components`](#artifactconfigcomponents).`[]`.`entrypoint`
+
+Entrypoint is this component's primary file, as a bundle-relative path (no
+leading "/", no ".." segments). Omit it when the component has no designated
+primary file.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | no |
+
+## Example json document
+
+```json
+{
+  "$schema": "https://ocidoc.org/schema/artifact-config-v1beta.json",
+  "components": {},
+  "schemaVersion": "v1beta"
+}
+```
+
+---
+
+> Generated with
+> [schemadoc](https://github.com/woozymasta/schemadoc)
+> version `v0.5.2`
+> commit `765723d161ffc216ae81de59c47b676e3d5c25f5`
+
+<!-- Automatically generated file, do not modify! -->

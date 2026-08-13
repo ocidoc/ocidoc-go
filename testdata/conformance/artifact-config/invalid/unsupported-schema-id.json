@@ -1,0 +1,7 @@
+{
+  "$schema": "https://example.com/other-schema.json",
+  "schemaVersion": "v1beta",
+  "components": {
+    "documentation": {}
+  }
+}

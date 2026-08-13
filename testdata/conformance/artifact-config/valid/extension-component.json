@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "v1beta",
+  "components": {
+    "documentation": {
+      "entrypoint": "README.md"
+    },
+    "x-runbooks": {
+      "entrypoint": "docs/runbooks/index.md"
+    },
+    "x-api-reference": {}
+  }
+}

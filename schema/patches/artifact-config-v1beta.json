@@ -1,0 +1,18 @@
+{
+  "$id": "https://ocidoc.org/schema/artifact-config-v1beta.json",
+  "$defs": {
+    "ArtifactConfig": {
+      "properties": {
+        "$schema": {
+          "const": "https://ocidoc.org/schema/artifact-config-v1beta.json"
+        },
+        "components": {
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
+          }
+        }
+      }
+    }
+  }
+}

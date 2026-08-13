@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "v1beta",
+  "settings": {
+    "compression": {
+      "type": "lzma"
+    }
+  },
+  "components": {
+    "documentation": ["/README.md"]
+  }
+}

@@ -1,0 +1,46 @@
+schemaVersion: v1beta
+
+components:
+  license:
+    - /{LICENSE,LICENCE}{,.md,.markdown,.txt}
+    - /{license,licence}{,.md,.txt}
+    - /{COPYING,NOTICE,LEGAL,COPYRIGHT}{,.md,.txt}
+    - /THIRD[-_]PARTY[-_]NOTICES{,.md,.txt}
+    - /THIRD[-_]PARTY[-_]LICENSES{,.md,.txt}
+    - /{LICENSE,LICENCE}[-_]*
+    - /{LICENSES,LICENCES,licenses,licences}/**
+    - /.reuse/**
+
+  documentation:
+    - /README{,.md,.markdown,.mdown,.txt}
+    - /readme{,.md,.markdown,.txt}
+    - /docs/**
+    - /doc/**
+    - "!/docs/{CONTRIBUTING,SECURITY,SUPPORT}{,.md,.markdown,.txt}"
+    - "!/docs/CODE[-_]OF[-_]CONDUCT{,.md,.markdown,.txt}"
+
+  contributing:
+    - /CONTRIBUTING{,.md,.markdown,.txt}
+    - /{.github,.gitlab}/CONTRIBUTING{,.md,.markdown,.txt}
+    - /docs/CONTRIBUTING{,.md,.markdown,.txt}
+
+  security:
+    - /SECURITY{,.md,.markdown,.txt}
+    - /{.github,.gitlab}/SECURITY{,.md,.markdown,.txt}
+    - /docs/SECURITY{,.md,.markdown,.txt}
+
+  code-of-conduct:
+    - /CODE[-_]OF[-_]CONDUCT{,.md,.markdown,.txt}
+    - /{.github,.gitlab}/CODE[-_]OF[-_]CONDUCT{,.md,.markdown,.txt}
+    - /docs/CODE[-_]OF[-_]CONDUCT{,.md,.markdown,.txt}
+
+  support:
+    - /SUPPORT{,.md,.markdown,.txt}
+    - /{.github,.gitlab}/SUPPORT{,.md,.markdown,.txt}
+    - /docs/SUPPORT{,.md,.markdown,.txt}
+
+  release-notes:
+    - /RELEASE[-_]NOTES{,.md,.markdown,.txt}
+
+  changelog:
+    - /{CHANGELOG,CHANGES,HISTORY,NEWS}{,.md,.markdown,.txt}

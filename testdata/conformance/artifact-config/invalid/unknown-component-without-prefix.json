@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "v1beta",
+  "components": {
+    "runbooks": {
+      "entrypoint": "docs/runbooks/index.md"
+    }
+  }
+}

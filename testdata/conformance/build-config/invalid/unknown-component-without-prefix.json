@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "v1beta",
+  "components": {
+    "runbooks": ["/runbooks/**"]
+  }
+}

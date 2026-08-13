@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "v1beta",
+  "annotations": {
+    "org.ocidoc.schema": "v1beta"
+  },
+  "components": {
+    "documentation": ["/README.md"]
+  }
+}
