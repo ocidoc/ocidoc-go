@@ -1,0 +1,5 @@
+[global]
+exclude = [
+  "docs/artifact-config-v1beta.md",
+  "docs/build-config-v1beta.md",
+]
