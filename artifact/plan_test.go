@@ -77,6 +77,23 @@ components:
 	}
 }
 
+func TestPlanEmbeddedDefaultDoesNotWarnForAbsentOptionalComponents(t *testing.T) {
+	root := t.TempDir()
+	writeConfigTree(t, root, map[string]string{
+		"README.md": "# hi",
+		"LICENSE":   "MIT",
+	})
+
+	plan, err := Plan(t.Context(), root, PlanOptions{})
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	if len(plan.Warnings) != 0 {
+		t.Fatalf("got warnings %v, want none for embedded default config", plan.Warnings)
+	}
+}
+
 func TestPlanRejectsCanceledContext(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{

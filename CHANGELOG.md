@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## Unreleased
+
+### Added
+
+* `store.Store.Export` for writing stored documents
+  as portable `.ocidoc` archives.
+
 ## [0.1.0][] - 2026-08-14
 
 ### Added

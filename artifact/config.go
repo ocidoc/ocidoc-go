@@ -42,21 +42,29 @@ var conventionalConfigNames = []string{"ocidoc.yaml", "ocidoc.yml", "ocidoc.json
 // it carries no defaulting beyond what the source itself sets
 // (see spec.BuildConfig for the omitted-vs-explicit distinction).
 func LoadBuildConfig(root, explicitPath string) (*spec.BuildConfig, error) {
+	cfg, _, err := loadBuildConfig(root, explicitPath)
+	return cfg, err
+}
+
+// loadBuildConfig is LoadBuildConfig with the resolved source name
+// returned to planning code that needs to distinguish the embedded optional defaults
+// from an authored project configuration.
+func loadBuildConfig(root, explicitPath string) (*spec.BuildConfig, string, error) {
 	data, name, err := readBuildConfigSource(root, explicitPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	cfg, err := parseBuildConfig(data, name)
 	if err != nil {
-		return nil, fmt.Errorf("parse build config %s: %w", name, err)
+		return nil, "", fmt.Errorf("parse build config %s: %w", name, err)
 	}
 
 	if err := spec.ValidateBuildConfig(cfg); err != nil {
-		return nil, fmt.Errorf("validate build config %s: %w", name, err)
+		return nil, "", fmt.Errorf("validate build config %s: %w", name, err)
 	}
 
-	return cfg, nil
+	return cfg, name, nil
 }
 
 // DefaultBuildConfig parses and returns the embedded default build config.

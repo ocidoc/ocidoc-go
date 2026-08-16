@@ -93,9 +93,9 @@ func startTestZot(t *testing.T) string {
 		_ = exec.Command("docker", "stop", containerID).Run()
 	})
 
-	portOut, err := exec.Command("docker", "port", containerID, "5000/tcp").Output()
+	portOut, err := exec.Command("docker", "port", containerID, "5000/tcp").CombinedOutput()
 	if err != nil {
-		t.Fatalf("docker port: %v", err)
+		t.Fatalf("docker port: %v: %s", err, strings.TrimSpace(string(portOut)))
 	}
 	addr := firstLine(string(portOut))
 	addr = strings.Replace(addr, "0.0.0.0", "127.0.0.1", 1)

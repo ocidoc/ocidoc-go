@@ -111,7 +111,7 @@ func Plan(ctx context.Context, root string, opts PlanOptions) (*BuildPlan, error
 		return nil, err
 	}
 
-	cfg, err := LoadBuildConfig(root, opts.ConfigPath)
+	cfg, configSource, err := loadBuildConfig(root, opts.ConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,9 @@ func Plan(ctx context.Context, root string, opts PlanOptions) (*BuildPlan, error
 		return nil, err
 	}
 
-	emptyWarnings, err := emptyComponentWarnings(cfg.Components, ownership, settings.Strict)
+	emptyWarnings, err := emptyComponentWarnings(
+		cfg.Components, ownership, settings.Strict, configSource == "embedded default",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -174,12 +176,13 @@ func Plan(ctx context.Context, root string, opts PlanOptions) (*BuildPlan, error
 }
 
 // emptyComponentWarnings finds declared components with no planned files.
-// In strict mode that is an *EmptyComponentsError;
-// otherwise it is returned as sorted, human-readable warning strings.
+// The embedded default config declares optional conventional components,
+// so their absence is silent unless strict mode was explicitly requested.
 func emptyComponentWarnings(
 	declared map[spec.ComponentType][]string,
 	ownership pathplan.Ownership,
 	strict bool,
+	embeddedDefault bool,
 ) ([]string, error) {
 	var empty []spec.ComponentType
 
@@ -197,6 +200,9 @@ func emptyComponentWarnings(
 
 	if strict {
 		return nil, &EmptyComponentsError{Components: empty}
+	}
+	if embeddedDefault {
+		return nil, nil
 	}
 
 	warnings := make([]string, 0, len(empty))
