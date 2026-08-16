@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning][].
 
 * `store.Store.Export` for writing stored documents
   as portable `.ocidoc` archives.
+* `artifact.PackageReader` for packaging an existing artifact graph.
+* Local-store deduplicated blob usage reporting.
 
 ## [0.1.0][] - 2026-08-14
 
