@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning][].
   as portable `.ocidoc` archives.
 * `artifact.PackageReader` for packaging an existing artifact graph.
 * Local-store deduplicated blob usage reporting.
+* Local-store verification, catalog repair and unreachable-blob pruning.
 
 ## [0.1.0][] - 2026-08-14
 
