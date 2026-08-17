@@ -195,7 +195,9 @@ func isWithinRoot(root, target string) bool {
 		return false
 	}
 
-	return rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
+	return rel == "." || (rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator)) &&
+		!filepath.IsAbs(rel))
 }
 
 // extractFile writes exactly size bytes read from r to target,

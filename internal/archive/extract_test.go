@@ -160,6 +160,25 @@ func TestExtractRejectsAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestIsWithinRootChecksParentPathSegments(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "root")
+
+	tests := map[string]bool{
+		root:                                 true,
+		filepath.Join(root, "..foo"):         true,
+		filepath.Join(root, "...", "file"):   true,
+		filepath.Join(root, "child", "file"): true,
+		filepath.Join(root, ".."):            false,
+		filepath.Join(root, "..", "file"):    false,
+	}
+
+	for target, want := range tests {
+		if got := isWithinRoot(root, target); got != want {
+			t.Errorf("isWithinRoot(%q, %q) = %v, want %v", root, target, got, want)
+		}
+	}
+}
+
 func TestExtractRejectsNonRegularEntry(t *testing.T) {
 	dest := t.TempDir()
 
