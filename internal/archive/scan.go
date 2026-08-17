@@ -66,8 +66,13 @@ func Scan(ctx context.Context, r io.Reader, opts ExtractOptions) ([]ScanEntry, I
 				spec.ErrUnsupported, opts.MaxTotalSize)
 		}
 
-		if _, err := io.Copy(io.Discard, tr); err != nil {
+		read, err := io.Copy(io.Discard, io.LimitReader(tr, header.Size))
+		if err != nil {
 			return nil, Info{}, fmt.Errorf("read entry %q: %w", header.Name, err)
+		}
+		if read != header.Size {
+			return nil, Info{}, fmt.Errorf("%w: entry %q contains %d bytes, want %d",
+				spec.ErrInvalid, header.Name, read, header.Size)
 		}
 
 		entries = append(entries, ScanEntry{Name: name, Size: header.Size})
