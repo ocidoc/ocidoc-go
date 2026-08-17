@@ -20,11 +20,11 @@ type ScanEntry struct {
 	// Name is the validated tar entry name.
 	Name string
 
-	// Size is the declared uncompressed file size.
-	Size int64
-
 	// Digest is the SHA-256 digest of the file content when requested.
 	Digest string
+
+	// Size is the declared uncompressed file size.
+	Size int64
 }
 
 // Scan reads and validates a tar stream without writing its files.
