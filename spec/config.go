@@ -17,8 +17,8 @@ type BuildConfig struct {
 	// Omit it to use the documented defaults (strict mode off, gzip at level 6).
 	Settings BuildSettings `json:"settings,omitzero" yaml:"settings,omitempty"`
 
-	// Document sets the built artifact's document identity (id, language, variant).
-	// Omit it to build the default, unlocalized document.
+	// Document sets the built artifact's document identity (id and variant).
+	// Omit it to build the default document.
 	Document DocumentSettings `json:"document,omitzero" yaml:"document,omitempty"`
 
 	// Entrypoints overrides the automatically detected primary file for one or more components, keyed by component name.
@@ -75,13 +75,7 @@ type DocumentSettings struct {
 	// that may be attached to the same subject.
 	ID string `json:"id,omitempty" yaml:"id,omitempty" jsonschema:"default=default"`
 
-	// Language identifies the document's language,
-	// when relevant to distinguishing it from other documents attached to the same subject.
-	// No particular tag format is required or enforced;
-	// omit it for a language-neutral document.
-	Language string `json:"language,omitempty" yaml:"language,omitempty"`
-
-	// Variant distinguishes multiple documents that share the same ID and language,
+	// Variant distinguishes multiple documents that share the same ID,
 	// for example "operator" versus "user".
 	// Omit it when only one variant of this document exists.
 	Variant string `json:"variant,omitempty" yaml:"variant,omitempty"`

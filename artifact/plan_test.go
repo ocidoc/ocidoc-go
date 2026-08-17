@@ -116,7 +116,6 @@ func TestPlanDocumentOverride(t *testing.T) {
 schemaVersion: v1beta
 document:
   id: default
-  language: en
 components:
   documentation:
     - /README.md
@@ -131,7 +130,7 @@ components:
 		t.Fatalf("Plan: %v", err)
 	}
 
-	want := spec.DocumentSettings{ID: "default", Language: "en", Variant: "full"}
+	want := spec.DocumentSettings{ID: "default", Variant: "full"}
 	if plan.Document != want {
 		t.Fatalf("got %+v, want %+v", plan.Document, want)
 	}

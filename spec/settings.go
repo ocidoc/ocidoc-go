@@ -66,7 +66,7 @@ func ResolveSettings(settings *BuildSettings) EffectiveSettings {
 
 // ResolveDocument applies the document identity defaults:
 // id defaults to DefaultDocumentID;
-// language and variant have no default and stay omitted (empty) when not set.
+// variant has no default and stays omitted (empty) when not set.
 func ResolveDocument(document DocumentSettings) DocumentSettings {
 	if document.ID == "" {
 		document.ID = DefaultDocumentID

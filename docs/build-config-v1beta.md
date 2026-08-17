@@ -79,8 +79,8 @@ rejected here.
 
 Key: `document`
 
-Document sets the built artifact's document identity (id, language, variant).
-Omit it to build the default, unlocalized document.
+Document sets the built artifact's document identity (id and variant). Omit it
+to build the default document.
 
 | Attribute | Value |
 | --- | --- |
@@ -222,7 +222,7 @@ related constants) for the artifact being built.
 | Attribute | Value |
 | --- | --- |
 | Type | `object` |
-| Properties | 3 |
+| Properties | 2 |
 | Additional properties | boolean schema=false |
 
 ### DocumentSettings.id
@@ -240,30 +240,14 @@ attached to the same subject.
 | Required | no |
 | Default | `default` |
 
-### DocumentSettings.language
-
-Key: `language`
-
-Path: [`document`](#buildconfigdocumentsettings).`language`
-
-Language identifies the document's language, when relevant to distinguishing it
-from other documents attached to the same subject. No particular tag format is
-required or enforced; omit it for a language-neutral document.
-
-| Attribute | Value |
-| --- | --- |
-| Type | `string` |
-| Required | no |
-
 ### DocumentSettings.variant
 
 Key: `variant`
 
 Path: [`document`](#buildconfigdocumentsettings).`variant`
 
-Variant distinguishes multiple documents that share the same ID and language,
-for example "operator" versus "user". Omit it when only one variant of this
-document exists.
+Variant distinguishes multiple documents that share the same ID, for example
+"operator" versus "user". Omit it when only one variant of this document exists.
 
 | Attribute | Value |
 | --- | --- |
@@ -282,19 +266,14 @@ annotations: {}
 # (documentation, license, changelog, release-notes, security, contributing, code-of-conduct, support)
 # or a custom "x-"-prefixed extension name.
 components: {}
-# Document sets the built artifact's document identity (id, language, variant).
-# Omit it to build the default, unlocalized document.
+# Document sets the built artifact's document identity (id and variant).
+# Omit it to build the default document.
 document:
   # ID identifies this artifact among multiple documentation artifacts
   # that may be attached to the same subject.
   # Default: default
   id: default
-  # Language identifies the document's language,
-  # when relevant to distinguishing it from other documents attached to the same subject.
-  # No particular tag format is required or enforced;
-  # omit it for a language-neutral document.
-  language: <string>
-  # Variant distinguishes multiple documents that share the same ID and language,
+  # Variant distinguishes multiple documents that share the same ID,
   # for example "operator" versus "user".
   # Omit it when only one variant of this document exists.
   variant: <string>

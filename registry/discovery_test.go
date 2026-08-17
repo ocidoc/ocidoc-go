@@ -64,11 +64,11 @@ func TestClientDiscoverSelectorsResolveMultipleReferrers(t *testing.T) {
 	pushPlainManifest(t, repo, "image")
 
 	client := NewClient(ClientOptions{PlainHTTP: true})
-	en, err := client.Attach(ctx, buildTestArtifactWithDocument(t, "api", "en", "full"), subject, AttachOptions{Publication: PublicationReferrer})
+	en, err := client.Attach(ctx, buildTestArtifactWithDocument(t, "api-en", "en", "full"), subject, AttachOptions{Publication: PublicationReferrer})
 	if err != nil {
 		t.Fatalf("Attach en: %v", err)
 	}
-	fr, err := client.Attach(ctx, buildTestArtifactWithDocument(t, "api", "fr", "full"), subject, AttachOptions{Publication: PublicationReferrer})
+	fr, err := client.Attach(ctx, buildTestArtifactWithDocument(t, "api-fr", "fr", "full"), subject, AttachOptions{Publication: PublicationReferrer})
 	if err != nil {
 		t.Fatalf("Attach fr: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestClientDiscoverSelectorsResolveMultipleReferrers(t *testing.T) {
 		t.Fatalf("expected errors.Is(err, ErrAmbiguous), got %v", err)
 	}
 
-	result, err := client.Discover(ctx, subject, DiscoverOptions{Document: "api", Language: "en", Variant: "full"})
+	result, err := client.Discover(ctx, subject, DiscoverOptions{Document: "api-en", Variant: "full"})
 	if err != nil {
 		t.Fatalf("Discover selectors: %v", err)
 	}
@@ -140,11 +140,11 @@ func TestClientDiscoverNotFoundAndInvalidMode(t *testing.T) {
 	}
 }
 
-func buildTestArtifactWithDocument(t *testing.T, id, language, variant string) artifact.Reader {
-	return buildTestArtifactWithDocumentContent(t, id, language, variant, fmt.Sprintf("# %s-%s-%s", id, language, variant))
+func buildTestArtifactWithDocument(t *testing.T, id, label, variant string) artifact.Reader {
+	return buildTestArtifactWithDocumentContent(t, id, label, variant, fmt.Sprintf("# %s-%s-%s", id, label, variant))
 }
 
-func buildTestArtifactWithDocumentContent(t *testing.T, id, language, variant, content string) artifact.Reader {
+func buildTestArtifactWithDocumentContent(t *testing.T, id, label, variant, content string) artifact.Reader {
 	t.Helper()
 
 	root := t.TempDir()
@@ -153,12 +153,11 @@ func buildTestArtifactWithDocumentContent(t *testing.T, id, language, variant, c
 schemaVersion: v1beta
 document:
   id: %s
-  language: %s
   variant: %s
 components:
   documentation:
     - /README.md
-`, id, language, variant),
+`, id, variant),
 		"README.md": content,
 	})
 	layoutDir := t.TempDir()

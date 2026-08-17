@@ -76,15 +76,15 @@ func TestResolveDocumentDefaultsID(t *testing.T) {
 		t.Fatalf("got ID %q, want %q", got.ID, DefaultDocumentID)
 	}
 
-	if got.Language != "" || got.Variant != "" {
-		t.Fatalf("expected language/variant to stay empty, got %+v", got)
+	if got.Variant != "" {
+		t.Fatalf("expected variant to stay empty, got %+v", got)
 	}
 }
 
 func TestResolveDocumentPreservesExplicitValues(t *testing.T) {
-	got := ResolveDocument(DocumentSettings{ID: "secondary", Language: "en", Variant: "full"})
+	got := ResolveDocument(DocumentSettings{ID: "secondary", Variant: "full"})
 
-	want := DocumentSettings{ID: "secondary", Language: "en", Variant: "full"}
+	want := DocumentSettings{ID: "secondary", Variant: "full"}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

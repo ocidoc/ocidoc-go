@@ -68,10 +68,6 @@ func buildManifest(
 	annotations[spec.AnnotationComponents] = strings.Join(names, ",")
 	annotations[spec.AnnotationDocumentID] = plan.Document.ID
 
-	if plan.Document.Language != "" {
-		annotations[spec.AnnotationDocumentLanguage] = plan.Document.Language
-	}
-
 	if plan.Document.Variant != "" {
 		annotations[spec.AnnotationDocumentVariant] = plan.Document.Variant
 	}

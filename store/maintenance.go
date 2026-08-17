@@ -21,14 +21,15 @@ import (
 
 // Verification describes the structural state of a local store.
 type Verification struct {
-	// Valid reports whether all indexed documents and catalog references passed verification.
-	Valid bool
+
+	// Issues contains structural or catalog problems found during verification.
+	Issues []string
 
 	// Documents is the number of root manifests found in the OCI index.
 	Documents int
 
-	// Issues contains structural or catalog problems found during verification.
-	Issues []string
+	// Valid reports whether all indexed documents and catalog references passed verification.
+	Valid bool
 }
 
 // PruneResult describes a local garbage-collection operation.

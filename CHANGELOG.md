@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning][].
 * Local-store deduplicated blob usage reporting.
 * Local-store verification, catalog repair and unreachable-blob pruning.
 
+### Removed
+
+* Document language from the artifact identity,
+  manifest annotations and registry selectors.
+
 ## [0.1.0][] - 2026-08-14
 
 ### Added

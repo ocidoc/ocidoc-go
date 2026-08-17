@@ -28,7 +28,7 @@
         },
         "document": {
           "$ref": "#/$defs/DocumentSettings",
-          "description": "Document sets the built artifact's document identity (id, language, variant).\nOmit it to build the default, unlocalized document."
+          "description": "Document sets the built artifact's document identity (id and variant).\nOmit it to build the default document."
         },
         "entrypoints": {
           "additionalProperties": {
@@ -117,12 +117,8 @@
           "description": "ID identifies this artifact among multiple documentation artifacts\nthat may be attached to the same subject.",
           "type": "string"
         },
-        "language": {
-          "description": "Language identifies the document's language,\nwhen relevant to distinguishing it from other documents attached to the same subject.\nNo particular tag format is required or enforced;\nomit it for a language-neutral document.",
-          "type": "string"
-        },
         "variant": {
-          "description": "Variant distinguishes multiple documents that share the same ID and language,\nfor example \"operator\" versus \"user\".\nOmit it when only one variant of this document exists.",
+          "description": "Variant distinguishes multiple documents that share the same ID,\nfor example \"operator\" versus \"user\".\nOmit it when only one variant of this document exists.",
           "type": "string"
         }
       },

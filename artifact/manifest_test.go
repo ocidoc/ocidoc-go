@@ -107,14 +107,11 @@ func TestBuildManifestStandalone(t *testing.T) {
 		t.Fatalf("got user annotation %q, want Docs", got)
 	}
 
-	if _, has := manifest.Annotations[spec.AnnotationDocumentLanguage]; has {
-		t.Fatal("did not expect a language annotation when Document.Language is empty")
-	}
 }
 
 func TestBuildManifestAttached(t *testing.T) {
 	plan := &BuildPlan{
-		Document:  spec.DocumentSettings{ID: "default", Language: "en"},
+		Document:  spec.DocumentSettings{ID: "default"},
 		Ownership: map[spec.ComponentType][]string{spec.ComponentDocumentation: {"README.md"}},
 	}
 
@@ -129,9 +126,6 @@ func TestBuildManifestAttached(t *testing.T) {
 		t.Fatalf("got subject %+v, want %+v", manifest.Subject, subject)
 	}
 
-	if got := manifest.Annotations[spec.AnnotationDocumentLanguage]; got != "en" {
-		t.Fatalf("got language annotation %q, want en", got)
-	}
 }
 
 func TestBuildManifestDoesNotMutatePlanAnnotations(t *testing.T) {

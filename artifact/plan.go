@@ -219,10 +219,6 @@ func mergeDocument(base, override spec.DocumentSettings) spec.DocumentSettings {
 		base.ID = override.ID
 	}
 
-	if override.Language != "" {
-		base.Language = override.Language
-	}
-
 	if override.Variant != "" {
 		base.Variant = override.Variant
 	}

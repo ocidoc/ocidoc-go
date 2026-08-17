@@ -18,9 +18,6 @@ const (
 	// AnnotationDocumentID identifies the logical documentation slot.
 	AnnotationDocumentID = "org.ocidoc.document.id"
 
-	// AnnotationDocumentLanguage identifies the document language, when set.
-	AnnotationDocumentLanguage = "org.ocidoc.document.language"
-
 	// AnnotationDocumentVariant identifies the document variant, when set.
 	AnnotationDocumentVariant = "org.ocidoc.document.variant"
 )

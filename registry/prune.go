@@ -23,9 +23,6 @@ type PruneOptions struct {
 	// Document restricts pruning to a document ID.
 	Document string
 
-	// Language restricts pruning to a document language.
-	Language string
-
 	// Variant restricts pruning to a document variant.
 	Variant string
 
@@ -70,9 +67,6 @@ type PruneResult struct {
 type documentSlot struct {
 	// document is the document identifier.
 	document string
-
-	// language is the document language.
-	language string
 
 	// variant distinguishes alternate forms of the same document.
 	variant string
@@ -257,7 +251,6 @@ func filterPruneSelectors(candidates []discoveryCandidate, opts PruneOptions) []
 func matchesPruneSelectors(candidate discoveryCandidate, opts PruneOptions) bool {
 	slot := candidateSlot(candidate)
 	return (opts.Document == "" || slot.document == opts.Document) &&
-		(opts.Language == "" || slot.language == opts.Language) &&
 		(opts.Variant == "" || slot.variant == opts.Variant)
 }
 
@@ -266,7 +259,6 @@ func candidateSlot(candidate discoveryCandidate) documentSlot {
 	annotations := candidate.manifest.Annotations
 	return documentSlot{
 		document: annotations[spec.AnnotationDocumentID],
-		language: annotations[spec.AnnotationDocumentLanguage],
 		variant:  annotations[spec.AnnotationDocumentVariant],
 	}
 }

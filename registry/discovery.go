@@ -41,9 +41,6 @@ type DiscoverOptions struct {
 	// Document restricts candidates by document ID.
 	Document string
 
-	// Language restricts candidates by document language.
-	Language string
-
 	// Variant restricts candidates by document variant.
 	Variant string
 
@@ -308,7 +305,6 @@ func sameSubject(a, b ocispec.Descriptor) bool {
 func matchesSelectors(candidate discoveryCandidate, opts DiscoverOptions) bool {
 	annotations := candidate.manifest.Annotations
 	return (opts.Document == "" || annotations[spec.AnnotationDocumentID] == opts.Document) &&
-		(opts.Language == "" || annotations[spec.AnnotationDocumentLanguage] == opts.Language) &&
 		(opts.Variant == "" || annotations[spec.AnnotationDocumentVariant] == opts.Variant) &&
 		(opts.Digest == "" || candidate.descriptor.Digest == opts.Digest)
 }

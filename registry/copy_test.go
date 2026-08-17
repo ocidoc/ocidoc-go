@@ -92,7 +92,7 @@ func TestClientCopySubjectToSubjectRebuildsOnlyRootManifest(t *testing.T) {
 	result, err := client.Copy(ctx,
 		Source{Kind: LocationSubject, Value: sourceSubject},
 		Destination{Kind: LocationSubject, Value: destinationSubject},
-		CopyOptions{Discover: DiscoverOptions{Document: "api", Language: "en", Variant: "full"}},
+		CopyOptions{Discover: DiscoverOptions{Document: "api", Variant: "full"}},
 	)
 	if err != nil {
 		t.Fatalf("Copy subject to subject: %v", err)
