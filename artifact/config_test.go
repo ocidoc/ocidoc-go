@@ -202,6 +202,26 @@ func TestLoadBuildConfigRejectsMalformedYAML(t *testing.T) {
 	}
 }
 
+func TestLoadBuildConfigRejectsAdditionalYAMLDocument(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, filepath.Join(root, "ocidoc.yaml"), "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n---\nstrict: true\n")
+
+	if _, err := LoadBuildConfig(root, ""); err == nil {
+		t.Fatal("expected parse error for an additional YAML document")
+	}
+}
+
+func TestLoadBuildConfigRejectsAdditionalJSONDocument(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, filepath.Join(root, "ocidoc.json"), `{"schemaVersion":"v1beta","components":{"documentation":["/README.md"]}} {"strict":true}`)
+
+	if _, err := LoadBuildConfig(root, ""); err == nil {
+		t.Fatal("expected parse error for an additional JSON document")
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,6 +142,9 @@ func parseBuildConfig(data []byte, name string) (*spec.BuildConfig, error) {
 		if err := decoder.Decode(&cfg); err != nil {
 			return nil, err
 		}
+		if err := rejectTrailingConfigDocument(decoder.Decode); err != io.EOF {
+			return nil, err
+		}
 
 		return &cfg, nil
 	}
@@ -151,6 +155,20 @@ func parseBuildConfig(data []byte, name string) (*spec.BuildConfig, error) {
 	if err := decoder.Decode(&cfg); err != nil {
 		return nil, err
 	}
+	if err := rejectTrailingConfigDocument(decoder.Decode); err != io.EOF {
+		return nil, err
+	}
 
 	return &cfg, nil
+}
+
+// rejectTrailingConfigDocument rejects a second configuration document
+// and returns io.EOF when the input contains exactly one document.
+func rejectTrailingConfigDocument(decode func(any) error) error {
+	var extra any
+	if err := decode(&extra); err == nil {
+		return fmt.Errorf("configuration must contain exactly one document")
+	} else {
+		return err
+	}
 }
