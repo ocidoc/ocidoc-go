@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
-## Unreleased
+## [0.2.0][] - 2026-08-17
 
 ### Added
 
@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning][].
 
 * Document language from the artifact identity,
   manifest annotations and registry selectors.
+
+[0.2.0]: https://github.com/ocidoc/ocidoc-go/compare/v0.1.0...v0.2.0
 
 ## [0.1.0][] - 2026-08-14
 
