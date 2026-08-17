@@ -39,6 +39,9 @@ type ExtractOptions struct {
 	// MaxFileSize limits bytes extracted for one file.
 	MaxFileSize int64
 
+	// ComputeDigest computes a SHA-256 digest for every scanned file.
+	ComputeDigest bool
+
 	// Overwrite allows extraction to replace an existing file.
 	// Default false: create files without overwrite unless explicitly asked.
 	Overwrite bool

@@ -103,6 +103,21 @@ func filterComponents(components []ComponentDescriptor, want spec.ComponentType)
 
 // listComponentFiles opens, decompresses and reads every tar header in component c.
 func listComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor, opts archive.ExtractOptions) ([]FileInfo, error) {
+	entries, err := scanComponentFiles(ctx, r, c, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		files = append(files, FileInfo{Component: c.Type, Path: entry.Name, Size: entry.Size})
+	}
+
+	return files, nil
+}
+
+// scanComponentFiles opens, decompresses and scans every file in component c.
+func scanComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor, opts archive.ExtractOptions) ([]archive.ScanEntry, error) {
 	rc, _, err := r.OpenComponent(ctx, c.Type)
 	if err != nil {
 		return nil, err
@@ -122,10 +137,5 @@ func listComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor, op
 		return nil, fmt.Errorf("component %q: %w", c.Type, err)
 	}
 
-	files := make([]FileInfo, 0, len(entries))
-	for _, entry := range entries {
-		files = append(files, FileInfo{Component: c.Type, Path: entry.Name, Size: entry.Size})
-	}
-
-	return files, nil
+	return entries, nil
 }

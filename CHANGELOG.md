@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning][].
 
 ### Changed
 
+* `artifact.Diff` now detects file replacements with unchanged sizes
+  by comparing streaming SHA-256 digests.
 * Artifact graph transfers no longer re-serialize manifest or config JSON;
   they copy and verify the original OCI blobs.
 * Archive-producing operations are named `BuildArchive` and `PullArchive`;

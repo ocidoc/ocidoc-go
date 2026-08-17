@@ -54,10 +54,7 @@ const (
 	// FileRemoved means the path exists only in the first (before) side.
 	FileRemoved
 
-	// FileModified means the path exists on both sides with a different size.
-	// File-level diffing works from tar headers alone (see List),
-	// so a same-size content change without a size change cannot be detected this way;
-	// that case is still caught at the component level by DigestChanged.
+	// FileModified means the path exists on both sides with different content.
 	FileModified
 )
 
@@ -67,7 +64,7 @@ type FileDiff struct {
 	// Path is the bundle-relative file path.
 	Path string
 
-	// Change classifies the file's presence or size change.
+	// Change classifies the file's presence or content change.
 	Change FileChange
 
 	// SizeBefore is the first artifact's tar-header size.
@@ -148,7 +145,7 @@ type DiffResult struct {
 // Diff compares two already-open artifacts: root manifest annotations,
 // artifact config schemaVersion, component presence, component descriptor digests
 // and, for components that were added, removed or whose digest changed,
-// file-level changes read from tar headers alone (see List; no file content is ever read).
+// file-level changes including SHA-256 content comparisons.
 //
 // Component presence and digest comparisons never open a component blob;
 // only the file-level stage does, and it is skipped entirely when opts.MetadataOnly is set.
@@ -349,9 +346,8 @@ func unionComponentTypes(a, b map[spec.ComponentType]ComponentDescriptor) []spec
 	return types
 }
 
-// diffComponentFiles compares one component's file lists
-// (tar headers only, via List's underlying listComponentFiles - no file content is read),
-// returning one FileDiff per path added, removed or changed in size.
+// diffComponentFiles compares one component's file lists and content digests,
+// returning one FileDiff per path added, removed or changed in content.
 // descA/descB are only read when inA/inB is true.
 func diffComponentFiles(
 	ctx context.Context,
@@ -359,12 +355,12 @@ func diffComponentFiles(
 	descA, descB ComponentDescriptor,
 	inA, inB bool,
 ) ([]FileDiff, error) {
-	sizesA, err := componentFileSizes(ctx, a, descA, inA)
+	sizesA, err := componentFileFingerprints(ctx, a, descA, inA)
 	if err != nil {
 		return nil, err
 	}
 
-	sizesB, err := componentFileSizes(ctx, b, descB, inB)
+	sizesB, err := componentFileFingerprints(ctx, b, descB, inB)
 	if err != nil {
 		return nil, err
 	}
@@ -372,36 +368,40 @@ func diffComponentFiles(
 	var diffs []FileDiff
 
 	for _, p := range unionKeys(sizesA, sizesB) {
-		sizeA, existsA := sizesA[p]
-		sizeB, existsB := sizesB[p]
+		fileA, existsA := sizesA[p]
+		fileB, existsB := sizesB[p]
 
 		switch {
 		case existsA && !existsB:
-			diffs = append(diffs, FileDiff{Path: p, Change: FileRemoved, SizeBefore: sizeA})
+			diffs = append(diffs, FileDiff{Path: p, Change: FileRemoved, SizeBefore: fileA.Size})
 		case !existsA && existsB:
-			diffs = append(diffs, FileDiff{Path: p, Change: FileAdded, SizeAfter: sizeB})
-		case sizeA != sizeB:
-			diffs = append(diffs, FileDiff{Path: p, Change: FileModified, SizeBefore: sizeA, SizeAfter: sizeB})
+			diffs = append(diffs, FileDiff{Path: p, Change: FileAdded, SizeAfter: fileB.Size})
+		case fileA.Size != fileB.Size || fileA.Digest != fileB.Digest:
+			diffs = append(diffs, FileDiff{Path: p, Change: FileModified, SizeBefore: fileA.Size, SizeAfter: fileB.Size})
 		}
 	}
 
 	return diffs, nil
 }
 
-// componentFileSizes lists c's files (nil if present is false) as a map from path to size.
-func componentFileSizes(ctx context.Context, r Reader, c ComponentDescriptor, present bool) (map[string]int64, error) {
+// componentFileFingerprints lists c's files (nil if present is false) by path.
+func componentFileFingerprints(
+	ctx context.Context,
+	r Reader,
+	c ComponentDescriptor, present bool,
+) (map[string]archive.ScanEntry, error) {
 	if !present {
 		return nil, nil
 	}
 
-	files, err := listComponentFiles(ctx, r, c, archive.ExtractOptions{})
+	files, err := scanComponentFiles(ctx, r, c, archive.ExtractOptions{ComputeDigest: true})
 	if err != nil {
 		return nil, err
 	}
 
-	sizes := make(map[string]int64, len(files))
+	sizes := make(map[string]archive.ScanEntry, len(files))
 	for _, f := range files {
-		sizes[f.Path] = f.Size
+		sizes[f.Name] = f
 	}
 
 	return sizes, nil

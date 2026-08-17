@@ -166,9 +166,10 @@ func parseBuildConfig(data []byte, name string) (*spec.BuildConfig, error) {
 // and returns io.EOF when the input contains exactly one document.
 func rejectTrailingConfigDocument(decode func(any) error) error {
 	var extra any
-	if err := decode(&extra); err == nil {
-		return fmt.Errorf("configuration must contain exactly one document")
-	} else {
-		return err
+	err := decode(&extra)
+	if err == nil {
+		return errors.New("configuration must contain exactly one document")
 	}
+
+	return err
 }

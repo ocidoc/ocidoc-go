@@ -145,6 +145,37 @@ func TestDiffDetectsComponentContentChange(t *testing.T) {
 	}
 }
 
+func TestDiffDetectsSameSizeComponentContentChange(t *testing.T) {
+	filesA := diffFixtureFiles()
+	filesB := diffFixtureFiles()
+	filesB["README.md"] = "same"
+
+	a := buildDiffLayout(t, filesA, BuildLayoutOptions{})
+	b := buildDiffLayout(t, filesB, BuildLayoutOptions{})
+
+	result, err := Diff(context.Background(), a, b, DiffOptions{})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+
+	var doc *ComponentDiff
+	for i := range result.Components {
+		if result.Components[i].Component == spec.ComponentDocumentation {
+			doc = &result.Components[i]
+		}
+	}
+
+	if doc == nil {
+		t.Fatalf("expected a documentation component diff, got %+v", result.Components)
+	}
+	if len(doc.Files) != 1 || doc.Files[0].Path != "README.md" || doc.Files[0].Change != FileModified {
+		t.Fatalf("expected same-size README.md replacement to be modified, got %+v", doc.Files)
+	}
+	if doc.Files[0].SizeBefore != 4 || doc.Files[0].SizeAfter != 4 {
+		t.Fatalf("got sizes %d -> %d, want 4 -> 4", doc.Files[0].SizeBefore, doc.Files[0].SizeAfter)
+	}
+}
+
 func TestDiffDetectsComponentAddedAndRemoved(t *testing.T) {
 	filesA := diffFixtureFiles()
 

@@ -7,6 +7,7 @@ package archive
 import (
 	"archive/tar"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,9 @@ type ScanEntry struct {
 
 	// Size is the declared uncompressed file size.
 	Size int64
+
+	// Digest is the SHA-256 digest of the file content when requested.
+	Digest string
 }
 
 // Scan reads and validates a tar stream without writing its files.
@@ -66,7 +70,16 @@ func Scan(ctx context.Context, r io.Reader, opts ExtractOptions) ([]ScanEntry, I
 				spec.ErrUnsupported, opts.MaxTotalSize)
 		}
 
-		read, err := io.Copy(io.Discard, io.LimitReader(tr, header.Size))
+		limited := io.LimitReader(tr, header.Size)
+		var content io.Reader
+		hash := sha256.New()
+		if opts.ComputeDigest {
+			content = io.TeeReader(limited, hash)
+		} else {
+			content = limited
+		}
+
+		read, err := io.Copy(io.Discard, content)
 		if err != nil {
 			return nil, Info{}, fmt.Errorf("read entry %q: %w", header.Name, err)
 		}
@@ -75,7 +88,12 @@ func Scan(ctx context.Context, r io.Reader, opts ExtractOptions) ([]ScanEntry, I
 				spec.ErrInvalid, header.Name, read, header.Size)
 		}
 
-		entries = append(entries, ScanEntry{Name: name, Size: header.Size})
+		entry := ScanEntry{Name: name, Size: header.Size}
+		if opts.ComputeDigest {
+			entry.Digest = fmt.Sprintf("sha256:%x", hash.Sum(nil))
+		}
+
+		entries = append(entries, entry)
 		totalSize += header.Size
 	}
 }
