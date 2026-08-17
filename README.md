@@ -10,7 +10,7 @@ public APIs and the format may change before OCIDoc `v1` is frozen.
 ## Install
 
 ```sh
-go get github.com/ocidoc/ocidoc-go@v0.1.0
+go get github.com/ocidoc/ocidoc-go
 ```
 
 ## Build an archive
