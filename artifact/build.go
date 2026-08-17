@@ -20,7 +20,7 @@ import (
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
-// Destination is Build's output target:
+// Destination is BuildArchive's output target:
 // the local path to write a packaged .ocidoc archive to.
 // Build always produces a single archive file;
 // BuildLayout remains directly available for a caller
@@ -42,7 +42,7 @@ type Observer interface {
 	Warn(message string)
 }
 
-// BuildOptions carries Build's inputs: a source tree, planning inputs,
+// BuildArchiveOptions carries BuildArchive's inputs: a source tree, planning inputs,
 // an output destination, and an optional Observer for non-fatal events.
 //
 // This carries planning inputs as PlanOptions
@@ -52,7 +52,7 @@ type Observer interface {
 // and reusing it here means planning (Plan) and a real build (Build)
 // load and merge config through the exact same code path
 // instead of requiring a caller to pre-merge a build config by hand.
-type BuildOptions struct {
+type BuildArchiveOptions struct {
 	// ModTime is the fixed modification time recorded in every tar entry and gzip header
 	// Zero means archive.ResolveModTime()'s default (SOURCE_DATE_EPOCH, or the Unix epoch).
 	ModTime time.Time
@@ -74,7 +74,7 @@ type BuildOptions struct {
 	Output Destination
 }
 
-// BuildResult is Build's outcome.
+// BuildResult is BuildArchive's outcome.
 type BuildResult struct {
 	// Plan is the resolved build plan used to create the artifact.
 	Plan *BuildPlan
@@ -92,7 +92,7 @@ type BuildResult struct {
 	Output string
 }
 
-// Build plans a build from opts.Root (see Plan),
+// BuildArchive plans a build from opts.Root (see Plan),
 // assembles a complete OCI Image Layout in a temporary directory (see BuildLayout),
 // and packages it as a single .ocidoc archive at opts.Output.Path (see PackageArchive).
 // Every plan warning is reported to opts.Observer, if set, before the layout is built.
@@ -100,7 +100,7 @@ type BuildResult struct {
 // The archive is written to a temporary file beside opts.Output.Path first
 // and renamed into place once complete,
 // so a failed build never leaves a partial or truncated file at the destination.
-func Build(ctx context.Context, opts BuildOptions) (*BuildResult, error) {
+func BuildArchive(ctx context.Context, opts BuildArchiveOptions) (*BuildResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

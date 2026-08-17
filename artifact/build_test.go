@@ -27,7 +27,7 @@ func TestBuildWritesArchive(t *testing.T) {
 	root := newLayoutFixture(t)
 	output := filepath.Join(t.TempDir(), "documentation.ocidoc")
 
-	result, err := Build(context.Background(), BuildOptions{
+	result, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root:   root,
 		Output: Destination{Path: output},
 	})
@@ -66,7 +66,7 @@ func TestBuildRejectsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := Build(ctx, BuildOptions{
+	_, err := BuildArchive(ctx, BuildArchiveOptions{
 		Root:   root,
 		Output: Destination{Path: output},
 	})
@@ -87,7 +87,7 @@ func TestBuildRefusesOverwriteByDefault(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	_, err := Build(context.Background(), BuildOptions{
+	_, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root:   root,
 		Output: Destination{Path: output},
 	})
@@ -113,12 +113,12 @@ func TestBuildOverwriteReplacesExistingFile(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	_, err := Build(context.Background(), BuildOptions{
+	_, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root:   root,
 		Output: Destination{Path: output, Overwrite: true},
 	})
 	if err != nil {
-		t.Fatalf("Build: %v", err)
+		t.Fatalf("BuildArchive: %v", err)
 	}
 
 	reader, err := OpenArchive(output)
@@ -144,7 +144,7 @@ components:
 
 	observer := &collectingObserver{}
 
-	result, err := Build(context.Background(), BuildOptions{
+	result, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root:     root,
 		Output:   Destination{Path: filepath.Join(t.TempDir(), "documentation.ocidoc")},
 		Observer: observer,
@@ -178,7 +178,7 @@ components:
 		"README.md": "# hi",
 	})
 
-	_, err := Build(context.Background(), BuildOptions{
+	_, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root:   root,
 		Output: Destination{Path: filepath.Join(t.TempDir(), "documentation.ocidoc")},
 	})
@@ -196,7 +196,7 @@ components:
 func TestBuildRequiresOutputPath(t *testing.T) {
 	root := newLayoutFixture(t)
 
-	_, err := Build(context.Background(), BuildOptions{Root: root})
+	_, err := BuildArchive(context.Background(), BuildArchiveOptions{Root: root})
 	if err == nil {
 		t.Fatal("expected an error when Output.Path is empty")
 	}
@@ -210,13 +210,13 @@ func TestBuildDeterministicWithFixedModTime(t *testing.T) {
 	outputA := filepath.Join(t.TempDir(), "a.ocidoc")
 	outputB := filepath.Join(t.TempDir(), "b.ocidoc")
 
-	if _, err := Build(context.Background(), BuildOptions{
+	if _, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root: root, Output: Destination{Path: outputA}, ModTime: modTime,
 	}); err != nil {
 		t.Fatalf("Build A: %v", err)
 	}
 
-	if _, err := Build(context.Background(), BuildOptions{
+	if _, err := BuildArchive(context.Background(), BuildArchiveOptions{
 		Root: root, Output: Destination{Path: outputB}, ModTime: modTime,
 	}); err != nil {
 		t.Fatalf("Build B: %v", err)

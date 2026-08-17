@@ -119,7 +119,7 @@ func (c *Client) Copy(ctx context.Context, source Source, destination Destinatio
 
 	case source.Kind == LocationRegistry && destination.Kind == LocationArchive:
 		var result *PullResult
-		result, err = c.Pull(ctx, source.Value, artifact.Destination{
+		result, err = c.PullArchive(ctx, source.Value, artifact.Destination{
 			Path: destination.Value, Overwrite: destination.Overwrite,
 		})
 		if result != nil {

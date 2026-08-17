@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning][].
 
 ### Added
 
+* `artifact.BuildReader` for building an OCI graph
+  without creating an intermediate `.ocidoc` archive.
+* `registry.Client.Pull` for opening a registry graph directly as a Reader.
 * Raw OCI blob access for preserving byte-exact manifest and config content
   across store, registry and `.ocidoc` transfers.
 * `store.Store.Export` for writing stored documents
@@ -30,6 +33,8 @@ and this project adheres to [Semantic Versioning][].
 
 * Artifact graph transfers no longer re-serialize manifest or config JSON;
   they copy and verify the original OCI blobs.
+* Archive-producing operations are named `BuildArchive` and `PullArchive`;
+  graph-first operations use `BuildReader` and `Pull`.
 * `store.Remove` no longer performs implicit blob garbage collection;
   unreachable content is reclaimed only by explicit store pruning.
 

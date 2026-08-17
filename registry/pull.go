@@ -29,20 +29,27 @@ import (
 // Component blobs are always streamed and are not subject to this in-memory limit.
 const maxMetadataBlobSize = ociblob.MaxMetadataSize
 
-// PullResult is Pull's result: the reference it resolved,
+// PullResult is PullArchive's result: the reference it resolved,
 // the pulled root manifest's descriptor, and the local path Pull wrote.
 type PullResult struct {
 	// Reference is the immutable reference resolved by Pull.
 	Reference string
 
-	// Output is the local archive path written by Pull.
+	// Output is the local archive path written by PullArchive.
 	Output string
 
 	// Manifest identifies the fetched root manifest.
 	Manifest ocispec.Descriptor
 }
 
-// Pull resolves reference ("host/repository:tag" or "host/repository@digest"),
+// Pull resolves reference to a lazy graph Reader.
+// The returned reader owns no persistent resources and must still be closed
+// by callers for interface consistency.
+func (c *Client) Pull(ctx context.Context, reference string) (artifact.Reader, error) {
+	return c.Open(ctx, reference)
+}
+
+// PullArchive resolves reference ("host/repository:tag" or "host/repository@digest"),
 // fetches its manifest, artifact config and every component blob,
 // and packages them as a .ocidoc archive at destination.Path -
 // the exact mirror of Push, and of what a local`ocidoc build` followed by `ocidoc push` would have produced.
@@ -52,7 +59,7 @@ type PullResult struct {
 //
 // The reference may identify a standalone or attached OCIDoc manifest;
 // callers performing subject selection should pass Discover's immutable Reference.
-func (c *Client) Pull(ctx context.Context, reference string, destination artifact.Destination) (*PullResult, error) {
+func (c *Client) PullArchive(ctx context.Context, reference string, destination artifact.Destination) (*PullResult, error) {
 	if destination.Path == "" {
 		return nil, fmt.Errorf("%w: destination path is required", ErrInvalid)
 	}
@@ -156,9 +163,8 @@ func writePulledLayout(
 	return writePulledLayoutMetadata(layoutDir, root)
 }
 
-// writePulledLayoutMetadata writes the two small top-level OCI Image
-// Layout files: "oci-layout" and "index.json" (referencing root as the
-// layout's sole entry).
+// writePulledLayoutMetadata writes the two small top-level OCI Image Layout files:
+// "oci-layout" and "index.json" (referencing root as the layout's sole entry).
 func writePulledLayoutMetadata(layoutDir string, root ocispec.Descriptor) error {
 	layoutBytes, err := json.Marshal(ocispec.ImageLayout{Version: ocispec.ImageLayoutVersion})
 	if err != nil {
@@ -187,12 +193,10 @@ func writePulledLayoutMetadata(layoutDir string, root ocispec.Descriptor) error 
 	return nil
 }
 
-// packagePulledLayout packages layoutDir as a .ocidoc archive at
-// dest.Path, via a temporary file in dest.Path's own directory renamed
-// into place only once the archive is fully written -- mirroring how
-// artifact.Build's own packageToDestination protects a build's output,
-// so a failed or interrupted Pull never leaves a partial file at
-// dest.Path either.
+// packagePulledLayout packages layoutDir as a .ocidoc archive at dest.Path,
+// via a temporary file in dest.Path's own directory renamed into place only once the archive is fully written -
+// mirroring how artifact.BuildArchive's own packageToDestination protects a build's output,
+// so a failed or interrupted Pull never leaves a partial file at dest.Path either.
 func packagePulledLayout(ctx context.Context, layoutDir string, dest artifact.Destination) error {
 	return atomicfile.WriteFile(dest.Path, dest.Overwrite, func(w io.Writer) error {
 		return artifact.PackageArchive(ctx, w, layoutDir, archive.ResolveModTime())
@@ -200,10 +204,10 @@ func packagePulledLayout(ctx context.Context, layoutDir string, dest artifact.De
 }
 
 // fetchBlob fetches desc's content from repo and returns it in memory,
-// verified against desc.Digest. Used only for the manifest, which
-// content-addressed OCI registries guarantee is small; component and
-// config blobs go through fetchBlobToFile instead, which never holds a
-// whole blob in memory.
+// verified against desc.Digest. Used only for the manifest,
+// which content-addressed OCI registries guarantee is small;
+// component and config blobs go through fetchBlobToFile instead,
+// which never holds a whole blob in memory.
 func fetchBlob(ctx context.Context, repo orasrepo.Repository, desc ocispec.Descriptor) ([]byte, error) {
 	if err := validateRegistryBlob(desc); err != nil {
 		return nil, err
@@ -234,10 +238,9 @@ func fetchBlob(ctx context.Context, repo orasrepo.Repository, desc ocispec.Descr
 }
 
 // fetchBlobToFile fetches desc's content from repo and streams it,
-// digest-checked as it is copied, to a new file under blobsDir named by
-// its digest -- written to a temporary file first and renamed into place
-// only once the digest check passes, so a verification failure never
-// leaves a wrongly-named blob behind.
+// digest-checked as it is copied, to a new file under blobsDir named by its digest -
+// written to a temporary file first and renamed into place only once the digest check passes,
+// so a verification failure never leaves a wrongly-named blob behind.
 func fetchBlobToFile(ctx context.Context, repo orasrepo.Repository, layoutDir string, desc ocispec.Descriptor) error {
 	if err := validateRegistryBlob(desc); err != nil {
 		return err

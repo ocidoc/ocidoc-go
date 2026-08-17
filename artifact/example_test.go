@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-func ExampleBuild() {
+func ExampleBuildArchive() {
 	ctx := context.Background()
 	root, err := os.MkdirTemp("", "ocidoc-example-*")
 	if err != nil {
@@ -27,7 +27,7 @@ func ExampleBuild() {
 		panic(err)
 	}
 
-	result, err := Build(ctx, BuildOptions{
+	result, err := BuildArchive(ctx, BuildArchiveOptions{
 		Root:   root,
 		Output: Destination{Path: filepath.Join(root, "documentation.ocidoc")},
 	})

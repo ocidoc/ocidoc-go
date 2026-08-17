@@ -15,11 +15,11 @@ go get github.com/ocidoc/ocidoc-go@v0.1.0
 
 ## Build an archive
 
-`artifact.Build` reads `ocidoc.yaml` or `ocidoc.json`
+`artifact.BuildArchive` reads `ocidoc.yaml` or `ocidoc.json`
 from the source tree and writes a deterministic `.ocidoc` archive.
 
 ```go
-result, err := artifact.Build(ctx, artifact.BuildOptions{
+result, err := artifact.BuildArchive(ctx, artifact.BuildArchiveOptions{
     Root: "./project",
     Output: artifact.Destination{Path: "project.ocidoc"},
 })
@@ -30,8 +30,9 @@ if err != nil {
 fmt.Println(result.Output)
 ```
 
-Use `artifact.BuildLayout` when the caller
-needs an unpacked OCI Image Layout instead of an archive.
+Use `artifact.BuildReader` when the caller needs a graph reader for committing
+to a local store or publishing to a registry without an archive.
+Use `artifact.BuildLayout` when the caller needs an unpacked OCI Image Layout.
 
 ## Read and verify an artifact
 

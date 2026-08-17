@@ -36,7 +36,7 @@ func TestClientPullStandaloneRoundTrip(t *testing.T) {
 
 	dest := filepath.Join(t.TempDir(), "pulled.ocidoc")
 
-	result, err := client.Pull(context.Background(), reference, artifact.Destination{Path: dest})
+	result, err := client.PullArchive(context.Background(), reference, artifact.Destination{Path: dest})
 	if err != nil {
 		t.Fatalf("Pull: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestClientPullDiscoveredAttachedRoundTrip(t *testing.T) {
 	}
 
 	dest := filepath.Join(t.TempDir(), "attached.ocidoc")
-	result, err := client.Pull(ctx, discovered.Reference, artifact.Destination{Path: dest})
+	result, err := client.PullArchive(ctx, discovered.Reference, artifact.Destination{Path: dest})
 	if err != nil {
 		t.Fatalf("Pull: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestClientPullRejectsExistingDestinationWithoutOverwrite(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	_, err := client.Pull(context.Background(), reference, artifact.Destination{Path: dest})
+	_, err := client.PullArchive(context.Background(), reference, artifact.Destination{Path: dest})
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("expected errors.Is(err, ErrInvalid), got %v", err)
 	}
@@ -143,7 +143,7 @@ func TestClientPullOverwritesExistingDestination(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if _, err := client.Pull(
+	if _, err := client.PullArchive(
 		context.Background(),
 		reference,
 		artifact.Destination{Path: dest, Overwrite: true},
@@ -159,7 +159,7 @@ func TestClientPullNonexistentReferenceIsNotFound(t *testing.T) {
 	client := NewClient(ClientOptions{PlainHTTP: true})
 	dest := filepath.Join(t.TempDir(), "pulled.ocidoc")
 
-	_, err := client.Pull(context.Background(), reference, artifact.Destination{Path: dest})
+	_, err := client.PullArchive(context.Background(), reference, artifact.Destination{Path: dest})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected errors.Is(err, ErrNotFound), got %v", err)
 	}
@@ -179,7 +179,7 @@ func TestClientPullRejectsNonOCIDocManifest(t *testing.T) {
 	client := NewClient(ClientOptions{PlainHTTP: true})
 	dest := filepath.Join(t.TempDir(), "pulled.ocidoc")
 
-	_, err = client.Pull(context.Background(), reference, artifact.Destination{Path: dest})
+	_, err = client.PullArchive(context.Background(), reference, artifact.Destination{Path: dest})
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("expected errors.Is(err, ErrInvalid), got %v", err)
 	}
