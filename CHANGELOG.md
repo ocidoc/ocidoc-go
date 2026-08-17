@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning][].
   including full stream draining and digest verification.
 * Compression defaults and level normalization: omitted type resolves to gzip,
   gzip levels are capped at 9 and zstd levels at 19.
+* Deep-copy metadata returned by all built-in artifact Readers.
 * Raw OCI blob access for preserving byte-exact manifest and config content
   across store, registry and `.ocidoc` transfers.
 * `store.Store.Export` for writing stored documents

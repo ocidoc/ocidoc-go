@@ -103,6 +103,55 @@ func TestOpenLayoutRoundTrip(t *testing.T) {
 	}
 }
 
+func TestOpenLayoutReaderReturnsMetadataCopies(t *testing.T) {
+	layoutDir, _ := buildTestLayout(t)
+	reader, err := OpenLayout(layoutDir)
+	if err != nil {
+		t.Fatalf("OpenLayout: %v", err)
+	}
+
+	ctx := context.Background()
+	manifest, err := reader.Manifest(ctx)
+	if err != nil {
+		t.Fatalf("Manifest: %v", err)
+	}
+	manifest.Layers[0].Annotations[spec.AnnotationComponentType] = "tampered"
+	manifest.Annotations = map[string]string{"tampered": "yes"}
+	manifest.Layers = nil
+
+	root, err := reader.Root(ctx)
+	if err != nil {
+		t.Fatalf("Root: %v", err)
+	}
+	root.Annotations = map[string]string{"tampered": "yes"}
+
+	components, err := reader.Components(ctx)
+	if err != nil {
+		t.Fatalf("Components: %v", err)
+	}
+	components[0].Descriptor.Annotations[spec.AnnotationComponentType] = "tampered"
+	components = nil
+
+	freshManifest, err := reader.Manifest(ctx)
+	if err != nil {
+		t.Fatalf("Manifest after mutation: %v", err)
+	}
+	if len(freshManifest.Layers) == 0 || freshManifest.Layers[0].Annotations[spec.AnnotationComponentType] == "tampered" {
+		t.Fatal("Manifest returned mutable internal state")
+	}
+	if freshManifest.Annotations != nil && freshManifest.Annotations["tampered"] == "yes" {
+		t.Fatal("Manifest annotations were not copied")
+	}
+
+	freshComponents, err := reader.Components(ctx)
+	if err != nil {
+		t.Fatalf("Components after mutation: %v", err)
+	}
+	if freshComponents[0].Descriptor.Annotations[spec.AnnotationComponentType] == "tampered" {
+		t.Fatal("component descriptor annotations were not copied")
+	}
+}
+
 func TestOpenLayoutOpenComponentReadsCorrectContent(t *testing.T) {
 	layoutDir, _ := buildTestLayout(t)
 

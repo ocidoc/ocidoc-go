@@ -18,6 +18,7 @@ import (
 
 	"github.com/ocidoc/ocidoc-go/artifact"
 	"github.com/ocidoc/ocidoc-go/internal/ociblob"
+	"github.com/ocidoc/ocidoc-go/internal/ociclone"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
@@ -75,7 +76,7 @@ func (r *storeReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
 		return ocispec.Descriptor{}, err
 	}
 
-	return r.root, nil
+	return ociclone.Descriptor(r.root), nil
 }
 
 // OpenBlob implements artifact.Reader.
@@ -102,7 +103,7 @@ func (r *storeReader) Manifest(ctx context.Context) (*ocispec.Manifest, error) {
 		return nil, err
 	}
 
-	return r.manifest, nil
+	return ociclone.Manifest(r.manifest), nil
 }
 
 // Config implements artifact.Reader.
@@ -133,7 +134,7 @@ func (r *storeReader) Components(ctx context.Context) ([]artifact.ComponentDescr
 			return nil, fmt.Errorf("%w: layer %s missing %s annotation", ErrInvalid, layer.Digest, spec.AnnotationComponentType)
 		}
 		components = append(components, artifact.ComponentDescriptor{
-			Type: spec.ComponentType(componentType), Descriptor: layer,
+			Type: spec.ComponentType(componentType), Descriptor: ociclone.Descriptor(layer),
 		})
 	}
 	sort.Slice(components, func(i, j int) bool { return components[i].Type < components[j].Type })

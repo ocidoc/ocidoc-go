@@ -15,6 +15,7 @@ import (
 
 	"github.com/ocidoc/ocidoc-go/artifact"
 	"github.com/ocidoc/ocidoc-go/internal/ociblob"
+	"github.com/ocidoc/ocidoc-go/internal/ociclone"
 	"github.com/ocidoc/ocidoc-go/internal/orasrepo"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
@@ -73,7 +74,7 @@ func (r *remoteReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
 	if err := ctx.Err(); err != nil {
 		return ocispec.Descriptor{}, err
 	}
-	return r.root, nil
+	return ociclone.Descriptor(r.root), nil
 }
 
 // OpenBlob implements artifact.Reader.
@@ -101,7 +102,7 @@ func (r *remoteReader) Manifest(ctx context.Context) (*ocispec.Manifest, error) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return r.manifest, nil
+	return ociclone.Manifest(r.manifest), nil
 }
 
 // Config implements artifact.Reader.
@@ -137,7 +138,7 @@ func (r *remoteReader) Components(ctx context.Context) ([]artifact.ComponentDesc
 			return nil, fmt.Errorf("%w: layer %s missing %s annotation", ErrInvalid, layer.Digest, spec.AnnotationComponentType)
 		}
 		components = append(components, artifact.ComponentDescriptor{
-			Type: spec.ComponentType(componentType), Descriptor: layer,
+			Type: spec.ComponentType(componentType), Descriptor: ociclone.Descriptor(layer),
 		})
 	}
 

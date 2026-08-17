@@ -17,6 +17,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/internal/ociblob"
+	"github.com/ocidoc/ocidoc-go/internal/ociclone"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
@@ -107,7 +108,7 @@ func (r *layoutReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
 		return ocispec.Descriptor{}, err
 	}
 
-	return r.root, nil
+	return ociclone.Descriptor(r.root), nil
 }
 
 // OpenBlob implements Reader.
@@ -142,7 +143,7 @@ func (r *layoutReader) Manifest(ctx context.Context) (*ocispec.Manifest, error) 
 		return nil, err
 	}
 
-	return r.manifest, nil
+	return ociclone.Manifest(r.manifest), nil
 }
 
 // Config implements Reader.
@@ -181,7 +182,7 @@ func (r *layoutReader) Components(ctx context.Context) ([]ComponentDescriptor, e
 
 		components = append(components, ComponentDescriptor{
 			Type:       spec.ComponentType(componentType),
-			Descriptor: layer,
+			Descriptor: ociclone.Descriptor(layer),
 		})
 	}
 
