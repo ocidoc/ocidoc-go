@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning][].
 * Bounded tar scanning for `artifact.List`, `Diff`
   and `Extract` collision preflight,
   including full stream draining and digest verification.
+* Compression defaults and level normalization: omitted type resolves to gzip,
+  gzip levels are capped at 9 and zstd levels at 19.
 * Raw OCI blob access for preserving byte-exact manifest and config content
   across store, registry and `.ocidoc` transfers.
 * `store.Store.Export` for writing stored documents

@@ -28,29 +28,29 @@ type BuildReaderOptions struct {
 	// Subject is the immutable descriptor of the artifact this manifest attaches to.
 	Subject *ocispec.Descriptor
 
-	// Plan configures build planning and caller-supplied overrides.
-	Plan PlanOptions
-
 	// Root is the source-tree directory to package.
 	Root string
+
+	// Plan configures build planning and caller-supplied overrides.
+	Plan PlanOptions
 }
 
 // BuildReaderResult is the result of BuildReader and its temporary graph reader.
 type BuildReaderResult struct {
-	// Plan is the resolved build plan.
-	Plan *BuildPlan
+	// Manifest is the built root manifest.
+	Manifest ocispec.Manifest
 
 	// Reader provides access to the built OCI graph.
 	Reader Reader
 
-	// Manifest is the built root manifest.
-	Manifest ocispec.Manifest
-
-	// ConfigDescriptor describes the artifact configuration blob.
-	ConfigDescriptor ocispec.Descriptor
+	// Plan is the resolved build plan.
+	Plan *BuildPlan
 
 	// ComponentDescriptors maps component types to their archive blobs.
 	ComponentDescriptors map[spec.ComponentType]ocispec.Descriptor
+
+	// ConfigDescriptor describes the artifact configuration blob.
+	ConfigDescriptor ocispec.Descriptor
 }
 
 // temporaryReader removes the temporary layout when the graph reader closes.

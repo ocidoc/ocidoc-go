@@ -150,3 +150,13 @@ func TestNewWriterRejectsUnsupportedType(t *testing.T) {
 		t.Fatalf("expected errors.Is(err, spec.ErrUnsupported), got %v", err)
 	}
 }
+
+func TestNewWriterClampsCompressionLevel(t *testing.T) {
+	content := []byte("content")
+	for _, typ := range []spec.CompressionType{spec.CompressionGzip, spec.CompressionZstd} {
+		got := compress(t, typ, spec.MaxCompressionLevel+1, time.Time{}, content)
+		if len(got) == 0 {
+			t.Fatalf("%s: expected compressed output", typ)
+		}
+	}
+}

@@ -69,6 +69,41 @@ func TestResolveSettingsExplicitCompressionLevel(t *testing.T) {
 	}
 }
 
+func TestResolveSettingsDefaultsEmptyCompressionType(t *testing.T) {
+	level := 19
+	got := ResolveSettings(&BuildSettings{
+		Compression: &CompressionSettings{Level: &level},
+	})
+
+	if got.Compression.Type != CompressionGzip {
+		t.Fatalf("got type %q, want %q", got.Compression.Type, CompressionGzip)
+	}
+	if got.Compression.Level != MaxGzipCompressionLevel {
+		t.Fatalf("got level %d, want gzip maximum %d", got.Compression.Level, MaxGzipCompressionLevel)
+	}
+}
+
+func TestResolveSettingsClampsCompressionLevels(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		typ  CompressionType
+		want int
+	}{
+		{name: "gzip", typ: CompressionGzip, want: MaxGzipCompressionLevel},
+		{name: "zstd", typ: CompressionZstd, want: MaxZstdCompressionLevel},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			level := MaxCompressionLevel + 1
+			got := ResolveSettings(&BuildSettings{
+				Compression: &CompressionSettings{Type: test.typ, Level: &level},
+			})
+			if got.Compression.Level != test.want {
+				t.Fatalf("got level %d, want %d", got.Compression.Level, test.want)
+			}
+		})
+	}
+}
+
 func TestResolveDocumentDefaultsID(t *testing.T) {
 	got := ResolveDocument(DocumentSettings{})
 

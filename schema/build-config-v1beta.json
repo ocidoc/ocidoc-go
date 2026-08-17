@@ -84,12 +84,12 @@
     },
     "CompressionSettings": {
       "additionalProperties": false,
-      "description": "CompressionSettings selects the component layer compression algorithm and, for gzip, its level.",
+      "description": "CompressionSettings selects the component layer compression algorithm and its level on the shared OCIDoc compression scale.",
       "properties": {
         "level": {
           "default": 6,
           "description": "Level controls the compression level used by the selected compressor.\nHigher levels may reduce artifact size at the cost of additional CPU time during build.",
-          "maximum": 9,
+          "maximum": 19,
           "minimum": 0,
           "type": "integer"
         },
@@ -103,9 +103,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "type"
-      ],
       "type": "object"
     },
     "DocumentSettings": {

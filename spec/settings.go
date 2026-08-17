@@ -9,9 +9,18 @@ package spec
 // of an existing build config that omits the corresponding field,
 // so they must not vary by code version, schema version or environment.
 const (
-	DefaultStrict           = false
-	DefaultCompressionType  = CompressionGzip
+	// DefaultStrict is the effective strict-mode value when it is omitted.
+	DefaultStrict = false
+	// DefaultCompressionType is the effective compressor when it is omitted.
+	DefaultCompressionType = CompressionGzip
+	// DefaultCompressionLevel is the effective compressor level when it is omitted.
 	DefaultCompressionLevel = 6
+	// MaxGzipCompressionLevel is the highest supported gzip level.
+	MaxGzipCompressionLevel = 9
+	// MaxZstdCompressionLevel is the highest supported zstd level in the config scale.
+	MaxZstdCompressionLevel = 19
+	// MaxCompressionLevel is the schema-wide upper bound across supported compressors.
+	MaxCompressionLevel = MaxZstdCompressionLevel
 )
 
 // EffectiveSettings is BuildSettings with every default applied:
@@ -54,10 +63,25 @@ func ResolveSettings(settings *BuildSettings) EffectiveSettings {
 	}
 
 	if settings.Compression != nil {
-		resolved.Compression.Type = settings.Compression.Type
+		compressionType := settings.Compression.Type
+		if compressionType == "" {
+			compressionType = DefaultCompressionType
+		}
+		resolved.Compression.Type = compressionType
 
 		if settings.Compression.Level != nil {
 			resolved.Compression.Level = *settings.Compression.Level
+		}
+
+		switch resolved.Compression.Type {
+		case CompressionGzip:
+			if resolved.Compression.Level > MaxGzipCompressionLevel {
+				resolved.Compression.Level = MaxGzipCompressionLevel
+			}
+		case CompressionZstd:
+			if resolved.Compression.Level > MaxZstdCompressionLevel {
+				resolved.Compression.Level = MaxZstdCompressionLevel
+			}
 		}
 	}
 

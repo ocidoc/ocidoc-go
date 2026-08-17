@@ -35,6 +35,11 @@ const gzipOS = 255
 // no added CRC (the library's default is off, but pinned explicitly here
 // rather than left to rely on that default silently continuing to hold in a future library version).
 func NewWriter(dst io.Writer, typ spec.CompressionType, level int, modTime time.Time) (io.WriteCloser, error) {
+	if typ == "" {
+		typ = spec.DefaultCompressionType
+	}
+	level = clampLevel(typ, level)
+
 	switch typ {
 	case spec.CompressionGzip:
 		return newGzipWriter(dst, level, modTime)
@@ -45,6 +50,27 @@ func NewWriter(dst io.Writer, typ spec.CompressionType, level int, modTime time.
 	default:
 		return nil, fmt.Errorf("%w: compression type %q", spec.ErrUnsupported, typ)
 	}
+}
+
+// clampLevel limits a compressor level to the supported config scale.
+func clampLevel(typ spec.CompressionType, level int) int {
+	var maximum int
+	switch typ {
+	case spec.CompressionGzip:
+		maximum = spec.MaxGzipCompressionLevel
+
+	case spec.CompressionZstd:
+		maximum = spec.MaxZstdCompressionLevel
+
+	default:
+		return level
+	}
+
+	if level > maximum {
+		return maximum
+	}
+
+	return level
 }
 
 // newGzipWriter creates a reproducible gzip stream

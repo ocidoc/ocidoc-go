@@ -55,17 +55,17 @@ type BuildSettings struct {
 }
 
 // CompressionSettings selects the component layer compression algorithm
-// and, for gzip, its level.
+// and its level on the shared OCIDoc compression scale.
 type CompressionSettings struct {
 	// Level controls the compression level used by the selected compressor.
 	// Higher levels may reduce artifact size at the cost of additional CPU time during build.
-	Level *int `json:"level,omitempty" yaml:"level,omitempty" jsonschema:"minimum=0,maximum=9,default=6"`
+	Level *int `json:"level,omitempty" yaml:"level,omitempty" jsonschema:"minimum=0,maximum=19,default=6"`
 
 	// Type selects the compression algorithm used for component layers.
 	// Gzip is the default and has the broadest registry client support;
 	// zstd typically compresses faster and smaller at a comparable level,
 	// at the cost of less universal tooling support.
-	Type CompressionType `json:"type" yaml:"type" jsonschema:"enum=gzip,enum=zstd,default=gzip"`
+	Type CompressionType `json:"type,omitempty" yaml:"type,omitempty" jsonschema:"enum=gzip,enum=zstd,default=gzip"`
 }
 
 // DocumentSettings sets the document identity tuple

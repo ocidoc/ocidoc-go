@@ -60,8 +60,10 @@ func ValidateBuildConfig(cfg *BuildConfig) error {
 	}
 
 	if cfg.Settings.Compression != nil {
-		if _, err := cfg.Settings.Compression.Type.MediaType(); err != nil {
-			return err
+		if cfg.Settings.Compression.Type != "" {
+			if _, err := cfg.Settings.Compression.Type.MediaType(); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -171,32 +171,14 @@ tree, instead of only warning about it.
 
 ## CompressionSettings
 
-CompressionSettings selects the component layer compression algorithm and, for
-gzip, its level.
+CompressionSettings selects the component layer compression algorithm and its
+level on the shared OCIDoc compression scale.
 
 | Attribute | Value |
 | --- | --- |
 | Type | `object` |
 | Properties | 2 |
 | Additional properties | boolean schema=false |
-
-### CompressionSettings.type
-
-Key: `type`
-
-Path: [`settings`](#buildconfigbuildsettings).[`compression`](#buildsettingscompressionsettings).`type`
-
-Type selects the compression algorithm used for component layers. Gzip is the
-default and has the broadest registry client support; zstd typically compresses
-faster and smaller at a comparable level, at the cost of less universal tooling
-support.
-
-| Attribute | Value |
-| --- | --- |
-| Type | `string` |
-| Required | yes |
-| Default | `gzip` |
-| Enum | `gzip`, `zstd` |
 
 ### CompressionSettings.level
 
@@ -212,7 +194,25 @@ levels may reduce artifact size at the cost of additional CPU time during build.
 | Type | `integer` |
 | Required | no |
 | Default | `6` |
-| Constraints | `minimum=0`; `maximum=9` |
+| Constraints | `minimum=0`; `maximum=19` |
+
+### CompressionSettings.type
+
+Key: `type`
+
+Path: [`settings`](#buildconfigbuildsettings).[`compression`](#buildsettingscompressionsettings).`type`
+
+Type selects the compression algorithm used for component layers. Gzip is the
+default and has the broadest registry client support; zstd typically compresses
+faster and smaller at a comparable level, at the cost of less universal tooling
+support.
+
+| Attribute | Value |
+| --- | --- |
+| Type | `string` |
+| Required | no |
+| Default | `gzip` |
+| Enum | `gzip`, `zstd` |
 
 ## DocumentSettings
 

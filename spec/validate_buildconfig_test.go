@@ -138,3 +138,12 @@ func TestValidateBuildConfigAcceptsSupportedCompression(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestValidateBuildConfigAcceptsDefaultCompressionType(t *testing.T) {
+	cfg := validBuildConfig()
+	cfg.Settings.Compression = &CompressionSettings{}
+
+	if err := ValidateBuildConfig(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
