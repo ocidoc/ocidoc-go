@@ -119,3 +119,35 @@ components:
 		}
 	}
 }
+
+func TestListEnforcesScanLimits(t *testing.T) {
+	root := t.TempDir()
+	writeConfigTree(t, root, map[string]string{
+		"ocidoc.yaml": `
+schemaVersion: v1beta
+components:
+  documentation:
+    - /README.md
+    - /docs/**
+`,
+		"README.md":     "# hi",
+		"docs/guide.md": "guide content here",
+	})
+
+	layoutDir := t.TempDir()
+	if _, _, err := BuildLayout(t.Context(), root, layoutDir, BuildLayoutOptions{}); err != nil {
+		t.Fatalf("BuildLayout: %v", err)
+	}
+	reader, err := OpenLayout(layoutDir)
+	if err != nil {
+		t.Fatalf("OpenLayout: %v", err)
+	}
+
+	_, err = List(t.Context(), reader, ListOptions{Component: spec.ComponentDocumentation, MaxFiles: 1})
+	if err == nil {
+		t.Fatal("expected List to reject a component over MaxFiles")
+	}
+	if !errors.Is(err, spec.ErrUnsupported) {
+		t.Fatalf("expected errors.Is(err, spec.ErrUnsupported), got %v", err)
+	}
+}

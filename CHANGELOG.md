@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning][].
 * `artifact.BuildReader` for building an OCI graph
   without creating an intermediate `.ocidoc` archive.
 * `registry.Client.Pull` for opening a registry graph directly as a Reader.
+* Bounded tar scanning for `artifact.List`, `Diff`
+  and `Extract` collision preflight,
+  including full stream draining and digest verification.
 * Raw OCI blob access for preserving byte-exact manifest and config content
   across store, registry and `.ocidoc` transfers.
 * `store.Store.Export` for writing stored documents

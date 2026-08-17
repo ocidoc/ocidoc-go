@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
+	"github.com/ocidoc/ocidoc-go/internal/archive"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
@@ -393,7 +394,7 @@ func componentFileSizes(ctx context.Context, r Reader, c ComponentDescriptor, pr
 		return nil, nil
 	}
 
-	files, err := listComponentFiles(ctx, r, c)
+	files, err := listComponentFiles(ctx, r, c, archive.ExtractOptions{})
 	if err != nil {
 		return nil, err
 	}

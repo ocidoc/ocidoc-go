@@ -44,8 +44,8 @@ type ExtractOptions struct {
 // forming one merged "global virtual tree" when more than one component is extracted
 // (no opts.Component means every component).
 //
-// Before writing anything, Extract lists every requested component's files
-// and validates the combined set has no path collisions (spec.ValidateBundlePaths) -
+// Before writing anything, Extract performs a bounded scan of every requested
+// component, lists its files and validates the combined set has no path collisions (spec.ValidateBundlePaths) -
 // catching a malformed or malicious artifact's overlapping paths
 // as one clear error before any file is written, rather than an O_EXCL failure partway through extraction.
 // This means each requested component is read twice (once to list, once to extract);
@@ -65,15 +65,15 @@ func Extract(ctx context.Context, r Reader, opts ExtractOptions) error {
 		}
 	}
 
-	if err := checkNoCollisions(ctx, r, components); err != nil {
-		return err
-	}
-
 	archiveOpts := archive.ExtractOptions{
 		MaxFiles:     opts.MaxFiles,
 		MaxTotalSize: opts.MaxTotalSize,
 		MaxFileSize:  opts.MaxFileSize,
 		Overwrite:    opts.Overwrite,
+	}
+
+	if err := checkNoCollisions(ctx, r, components, archiveOpts); err != nil {
+		return err
 	}
 
 	for _, c := range components {
@@ -87,11 +87,11 @@ func Extract(ctx context.Context, r Reader, opts ExtractOptions) error {
 
 // checkNoCollisions lists every file in components
 // and validates the combined path set has no exact or case-insensitive duplicates.
-func checkNoCollisions(ctx context.Context, r Reader, components []ComponentDescriptor) error {
+func checkNoCollisions(ctx context.Context, r Reader, components []ComponentDescriptor, opts archive.ExtractOptions) error {
 	var allPaths []string
 
 	for _, c := range components {
-		files, err := listComponentFiles(ctx, r, c)
+		files, err := listComponentFiles(ctx, r, c, opts)
 		if err != nil {
 			return err
 		}

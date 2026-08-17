@@ -5,13 +5,11 @@
 package artifact
 
 import (
-	"archive/tar"
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"sort"
 
+	"github.com/ocidoc/ocidoc-go/internal/archive"
 	"github.com/ocidoc/ocidoc-go/internal/compression"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
@@ -34,10 +32,22 @@ type FileInfo struct {
 type ListOptions struct {
 	// Component restricts listing to one semantic component type.
 	Component spec.ComponentType
+
+	// MaxFiles limits files scanned from each component.
+	// Zero uses the safe default.
+	MaxFiles int
+
+	// MaxTotalSize limits uncompressed bytes scanned from each component.
+	// Zero uses the safe default.
+	MaxTotalSize int64
+
+	// MaxFileSize limits one uncompressed file's declared size.
+	// Zero uses the safe default.
+	MaxFileSize int64
 }
 
-// List reads every component's tar headers
-// (via Reader.OpenComponent, which verifies each blob's digest as it is read - see digestVerifyingReadCloser)
+// List reads every component's tar headers through a bounded scan
+// (via Reader.OpenComponent, which verifies each blob's digest as it is drained)
 // and returns their files, sorted by component and then by path.
 // It never writes file content anywhere; see Extract for that.
 //
@@ -59,7 +69,9 @@ func List(ctx context.Context, r Reader, opts ListOptions) ([]FileInfo, error) {
 	var files []FileInfo
 
 	for _, c := range components {
-		entries, err := listComponentFiles(ctx, r, c)
+		entries, err := listComponentFiles(ctx, r, c, archive.ExtractOptions{
+			MaxFiles: opts.MaxFiles, MaxTotalSize: opts.MaxTotalSize, MaxFileSize: opts.MaxFileSize,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +102,7 @@ func filterComponents(components []ComponentDescriptor, want spec.ComponentType)
 }
 
 // listComponentFiles opens, decompresses and reads every tar header in component c.
-func listComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor) ([]FileInfo, error) {
+func listComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor, opts archive.ExtractOptions) ([]FileInfo, error) {
 	rc, _, err := r.OpenComponent(ctx, c.Type)
 	if err != nil {
 		return nil, err
@@ -105,25 +117,14 @@ func listComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor) ([
 	//nolint:errcheck // read-only handle; a close error here would not change the result already computed.
 	defer decompressed.Close()
 
-	tr := tar.NewReader(decompressed)
+	entries, _, err := archive.Scan(ctx, decompressed, opts)
+	if err != nil {
+		return nil, fmt.Errorf("component %q: %w", c.Type, err)
+	}
 
-	var files []FileInfo
-
-	for {
-		header, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("component %q: read tar header: %w", c.Type, err)
-		}
-
-		if header.Typeflag != tar.TypeReg {
-			continue
-		}
-
-		files = append(files, FileInfo{Component: c.Type, Path: header.Name, Size: header.Size})
+	files := make([]FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		files = append(files, FileInfo{Component: c.Type, Path: entry.Name, Size: entry.Size})
 	}
 
 	return files, nil

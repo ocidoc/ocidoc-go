@@ -137,3 +137,39 @@ func TestExtractOverwriteReplacesExistingFile(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, "# hi")
 	}
 }
+
+func TestExtractPreflightEnforcesScanLimits(t *testing.T) {
+	root := t.TempDir()
+	writeConfigTree(t, root, map[string]string{
+		"ocidoc.yaml": `
+schemaVersion: v1beta
+components:
+  documentation:
+    - /README.md
+    - /docs/**
+`,
+		"README.md":     "# hi",
+		"docs/guide.md": "guide content here",
+	})
+
+	layoutDir := t.TempDir()
+	if _, _, err := BuildLayout(t.Context(), root, layoutDir, BuildLayoutOptions{}); err != nil {
+		t.Fatalf("BuildLayout: %v", err)
+	}
+	reader, err := OpenLayout(layoutDir)
+	if err != nil {
+		t.Fatalf("OpenLayout: %v", err)
+	}
+
+	dest := t.TempDir()
+	err = Extract(t.Context(), reader, ExtractOptions{Output: dest, MaxFiles: 1})
+	if err == nil {
+		t.Fatal("expected Extract preflight to reject a component over MaxFiles")
+	}
+	if !errors.Is(err, spec.ErrUnsupported) {
+		t.Fatalf("expected errors.Is(err, spec.ErrUnsupported), got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dest, "README.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("preflight wrote a file before rejecting the component, stat error: %v", statErr)
+	}
+}
