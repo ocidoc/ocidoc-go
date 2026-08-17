@@ -5,9 +5,7 @@
 package store
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -15,7 +13,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/artifact"
-	"github.com/ocidoc/ocidoc-go/internal/ociblob"
 )
 
 // Origin describes where a committed document came from,
@@ -34,11 +31,8 @@ type Origin struct {
 // into the store, deduplicating against content already present by digest,
 // and records a catalog entry for the result.
 //
-// Commit trusts source's own shape
-// (a Reader only ever exposes an already-recognized OCIDoc manifest);
-// it re-verifies each blob's digest against its own descriptor before storing it regardless,
-// the same defensive check registry.Client.Push
-// and Pull both already make at their own trust boundaries.
+// Commit verifies each source blob against its descriptor
+// at the store boundary and preserves its original bytes.
 func (s *Store) Commit(ctx context.Context, source artifact.Reader, origin Origin) (*Document, error) {
 	var committed *Document
 	if err := s.withCatalogLock(ctx, func() error {
@@ -73,7 +67,7 @@ func (s *Store) commit(ctx context.Context, source artifact.Reader, origin Origi
 		return nil, err
 	}
 
-	if err := s.commitManifest(ctx, *manifest, root); err != nil {
+	if err := s.commitManifest(ctx, source, root); err != nil {
 		return nil, err
 	}
 
@@ -98,24 +92,15 @@ func (s *Store) commit(ctx context.Context, source artifact.Reader, origin Origi
 	return doc, nil
 }
 
-// commitConfig re-serializes source's artifact config,
-// checks it still hashes to expected (the manifest's own record of it), and stores it.
+// commitConfig stores the manifest's original config blob without re-serialization.
 func (s *Store) commitConfig(ctx context.Context, source artifact.Reader, expected ocispec.Descriptor) error {
-	cfg, err := source.Config(ctx)
+	rc, err := source.OpenBlob(ctx, expected)
 	if err != nil {
 		return err
 	}
+	defer rc.Close() //nolint:errcheck // store push reports read failures.
 
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("marshal artifact config: %w", err)
-	}
-
-	if err := ociblob.Verify(expected, data); err != nil {
-		return err
-	}
-
-	return s.pushIfMissing(ctx, expected, bytes.NewReader(data))
+	return s.pushIfMissing(ctx, expected, rc)
 }
 
 // commitComponents stores every component blob exactly as source streams it,
@@ -147,19 +132,15 @@ func (s *Store) commitComponent(ctx context.Context, source artifact.Reader, com
 	return s.pushIfMissing(ctx, comp.Descriptor, rc)
 }
 
-// commitManifest re-serializes manifest, checks it still hashes to root
-// (Reader.Root's own record of it), and stores it.
-func (s *Store) commitManifest(ctx context.Context, manifest ocispec.Manifest, root ocispec.Descriptor) error {
-	data, err := json.Marshal(manifest)
+// commitManifest stores the root manifest's original blob without re-serialization.
+func (s *Store) commitManifest(ctx context.Context, source artifact.Reader, root ocispec.Descriptor) error {
+	rc, err := source.OpenBlob(ctx, root)
 	if err != nil {
-		return fmt.Errorf("marshal manifest: %w", err)
-	}
-
-	if err := ociblob.Verify(root, data); err != nil {
 		return err
 	}
+	defer rc.Close() //nolint:errcheck // store push reports read failures.
 
-	return s.pushIfMissing(ctx, root, bytes.NewReader(data))
+	return s.pushIfMissing(ctx, root, rc)
 }
 
 // pushIfMissing stores desc's content unless it is already present -

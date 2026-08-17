@@ -78,6 +78,24 @@ func (r *storeReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
 	return r.root, nil
 }
 
+// OpenBlob implements artifact.Reader.
+func (r *storeReader) OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error) {
+	if err := ociblob.Validate(desc); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+
+	rc, err := r.store.oci.Fetch(ctx, desc)
+	if err != nil {
+		return nil, err
+	}
+	verified, err := ociblob.NewVerifyingReadCloser(rc, desc, "blob", ErrInvalid, spec.ErrVerification)
+	if err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	return verified, nil
+}
+
 // Manifest implements artifact.Reader.
 func (r *storeReader) Manifest(ctx context.Context) (*ocispec.Manifest, error) {
 	if err := ctx.Err(); err != nil {
@@ -136,13 +154,8 @@ func (r *storeReader) OpenComponent(ctx context.Context, component spec.Componen
 			continue
 		}
 
-		rc, err := r.store.oci.Fetch(ctx, candidate.Descriptor)
+		verified, err := r.OpenBlob(ctx, candidate.Descriptor)
 		if err != nil {
-			return nil, artifact.ComponentDescriptor{}, fmt.Errorf("fetch component %q: %w", component, err)
-		}
-		verified, err := ociblob.NewVerifyingReadCloser(rc, candidate.Descriptor, "component", ErrInvalid, spec.ErrVerification)
-		if err != nil {
-			_ = rc.Close()
 			return nil, artifact.ComponentDescriptor{}, err
 		}
 		return verified, candidate, nil

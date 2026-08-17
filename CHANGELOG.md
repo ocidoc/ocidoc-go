@@ -18,11 +18,18 @@ and this project adheres to [Semantic Versioning][].
 
 ### Added
 
+* Raw OCI blob access for preserving byte-exact manifest and config content
+  across store, registry and `.ocidoc` transfers.
 * `store.Store.Export` for writing stored documents
   as portable `.ocidoc` archives.
 * `artifact.PackageReader` for packaging an existing artifact graph.
 * Local-store deduplicated blob usage reporting.
 * Local-store verification, catalog repair and unreachable-blob pruning.
+
+### Changed
+
+* Artifact graph transfers no longer re-serialize manifest or config JSON;
+  they copy and verify the original OCI blobs.
 
 ### Removed
 

@@ -18,7 +18,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/internal/archive"
-	"github.com/ocidoc/ocidoc-go/internal/ociblob"
 )
 
 // PackageReader writes reader's complete OCI graph as a portable .ocidoc archive.
@@ -43,30 +42,12 @@ func PackageReader(ctx context.Context, reader Reader, dst io.Writer, modTime ti
 	if err != nil {
 		return err
 	}
-	manifestData, err := json.Marshal(manifest)
-	if err != nil {
-		return fmt.Errorf("marshal manifest: %w", err)
-	}
-	if err := ociblob.Verify(root, manifestData); err != nil {
-		return fmt.Errorf("verify manifest: %w", err)
-	}
-	if err := os.WriteFile(blobPath(layoutDir, root.Digest), manifestData, 0o600); err != nil {
-		return fmt.Errorf("write manifest: %w", err)
+	if err := copyBlob(ctx, reader, root, blobPath(layoutDir, root.Digest)); err != nil {
+		return fmt.Errorf("copy manifest: %w", err)
 	}
 
-	config, err := reader.Config(ctx)
-	if err != nil {
-		return err
-	}
-	configData, err := json.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
-	}
-	if err := ociblob.Verify(manifest.Config, configData); err != nil {
-		return fmt.Errorf("verify config: %w", err)
-	}
-	if err := os.WriteFile(blobPath(layoutDir, manifest.Config.Digest), configData, 0o600); err != nil {
-		return fmt.Errorf("write config: %w", err)
+	if err := copyBlob(ctx, reader, manifest.Config, blobPath(layoutDir, manifest.Config.Digest)); err != nil {
+		return fmt.Errorf("copy config: %w", err)
 	}
 
 	components, err := reader.Components(ctx)
@@ -74,26 +55,9 @@ func PackageReader(ctx context.Context, reader Reader, dst io.Writer, modTime ti
 		return err
 	}
 	for _, component := range components {
-		source, _, err := reader.OpenComponent(ctx, component.Type)
-		if err != nil {
-			return err
-		}
-		target, err := os.OpenFile(blobPath(layoutDir, component.Descriptor.Digest), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-		if err != nil {
-			_ = source.Close()
-			return fmt.Errorf("create component %q: %w", component.Type, err)
-		}
-		_, copyErr := io.Copy(target, source)
-		closeSourceErr := source.Close()
-		closeTargetErr := target.Close()
-		if copyErr != nil {
-			return fmt.Errorf("copy component %q: %w", component.Type, copyErr)
-		}
-		if closeSourceErr != nil {
-			return fmt.Errorf("close component %q: %w", component.Type, closeSourceErr)
-		}
-		if closeTargetErr != nil {
-			return fmt.Errorf("close component %q: %w", component.Type, closeTargetErr)
+		if err := copyBlob(ctx, reader, component.Descriptor,
+			blobPath(layoutDir, component.Descriptor.Digest)); err != nil {
+			return fmt.Errorf("copy component %q: %w", component.Type, err)
 		}
 	}
 
@@ -119,7 +83,34 @@ func PackageReader(ctx context.Context, reader Reader, dst io.Writer, modTime ti
 	if modTime.IsZero() {
 		modTime = archive.ResolveModTime()
 	}
+
 	return PackageArchive(ctx, dst, layoutDir, modTime)
+}
+
+// copyBlob copies one verified raw OCI blob to path without transforming it.
+func copyBlob(ctx context.Context, reader Reader, desc ocispec.Descriptor, path string) error {
+	source, err := reader.OpenBlob(ctx, desc)
+	if err != nil {
+		return err
+	}
+
+	target, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		_ = source.Close()
+		return err
+	}
+
+	_, copyErr := io.Copy(target, source)
+	closeSourceErr := source.Close()
+	closeTargetErr := target.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeSourceErr != nil {
+		return closeSourceErr
+	}
+
+	return closeTargetErr
 }
 
 func blobPath(layoutDir string, d digest.Digest) string {

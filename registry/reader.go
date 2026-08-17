@@ -76,6 +76,26 @@ func (r *remoteReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
 	return r.root, nil
 }
 
+// OpenBlob implements artifact.Reader.
+func (r *remoteReader) OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error) {
+	if err := validateRegistryBlob(desc); err != nil {
+		return nil, fmt.Errorf("blob descriptor: %w", err)
+	}
+
+	rc, err := r.repo.Fetch(ctx, desc)
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	verified, err := ociblob.NewVerifyingReadCloser(rc, desc, "blob", ErrInvalid, ErrVerification)
+	if err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+
+	return verified, nil
+}
+
 // Manifest implements artifact.Reader.
 func (r *remoteReader) Manifest(ctx context.Context) (*ocispec.Manifest, error) {
 	if err := ctx.Err(); err != nil {
@@ -144,14 +164,8 @@ func (r *remoteReader) OpenComponent(
 			return nil, artifact.ComponentDescriptor{}, fmt.Errorf("%w: component %q has negative size", ErrInvalid, component)
 		}
 
-		rc, err := r.repo.Fetch(ctx, candidate.Descriptor)
+		verified, err := r.OpenBlob(ctx, candidate.Descriptor)
 		if err != nil {
-			return nil, artifact.ComponentDescriptor{}, wrapError(err)
-		}
-
-		verified, err := ociblob.NewVerifyingReadCloser(rc, candidate.Descriptor, "component", ErrInvalid, ErrVerification)
-		if err != nil {
-			_ = rc.Close()
 			return nil, artifact.ComponentDescriptor{}, err
 		}
 

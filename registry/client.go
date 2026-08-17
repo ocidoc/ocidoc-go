@@ -5,16 +5,13 @@
 package registry
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/artifact"
-	"github.com/ocidoc/ocidoc-go/internal/ociblob"
 	"github.com/ocidoc/ocidoc-go/internal/orasrepo"
 )
 
@@ -74,10 +71,8 @@ func (c *Client) Resolve(ctx context.Context, reference string) (ocispec.Descrip
 // tagged with reference's own tag. reference must include a tag;
 // pushing by digest alone leaves nothing to tag.
 //
-// source's manifest, config and component descriptors are pushed exactly as source already computed them
-// (re-serialized, then digest-checked against those descriptors before anything is sent)
-// rather than rebuilt from scratch,
-// so a round-tripped artifact keeps the same digests a local `ocidoc inspect` already reported for it.
+// source's manifest, config and component descriptors are pushed exactly as source
+// already computed them rather than rebuilt from parsed values.
 func (c *Client) Push(ctx context.Context, source artifact.Reader, reference string) (*PushResult, error) {
 	_, tag, err := orasrepo.ParseReference(reference)
 	if err != nil {
@@ -113,7 +108,7 @@ func (c *Client) Push(ctx context.Context, source artifact.Reader, reference str
 		return nil, err
 	}
 
-	if err := c.pushManifest(ctx, repo, *manifest, root); err != nil {
+	if err := c.pushManifest(ctx, source, repo, root); err != nil {
 		return nil, err
 	}
 
@@ -139,29 +134,20 @@ func (c *Client) pushGraph(
 	return c.pushComponents(ctx, source, repo)
 }
 
-// pushConfig re-serializes source's artifact config, checks it still hashes to expected
-// (the manifest's own record of it), and pushes it.
+// pushConfig pushes the manifest's original config blob without re-serialization.
 func (c *Client) pushConfig(
 	ctx context.Context,
 	source artifact.Reader,
 	repo orasrepo.Repository,
 	expected ocispec.Descriptor,
 ) error {
-	cfg, err := source.Config(ctx)
+	rc, err := source.OpenBlob(ctx, expected)
 	if err != nil {
 		return err
 	}
+	defer rc.Close() //nolint:errcheck // repository push reports read failures.
 
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("marshal artifact config: %w", err)
-	}
-
-	if err := verifyDigest("artifact config", data, expected); err != nil {
-		return err
-	}
-
-	if err := repo.Push(ctx, expected, bytes.NewReader(data)); err != nil {
+	if err := repo.Push(ctx, expected, rc); err != nil {
 		return wrapError(err)
 	}
 
@@ -210,40 +196,21 @@ func (c *Client) pushComponent(
 	return nil
 }
 
-// pushManifest re-serializes manifest, checks it still hashes to root
-// (Reader.Root's own record of it), and pushes it.
+// pushManifest pushes the root manifest's original blob without re-serialization.
 func (c *Client) pushManifest(
 	ctx context.Context,
+	source artifact.Reader,
 	repo orasrepo.Repository,
-	manifest ocispec.Manifest,
 	root ocispec.Descriptor,
 ) error {
-	data, err := json.Marshal(manifest)
+	rc, err := source.OpenBlob(ctx, root)
 	if err != nil {
-		return fmt.Errorf("marshal manifest: %w", err)
-	}
-
-	if err := verifyDigest("manifest", data, root); err != nil {
 		return err
 	}
+	defer rc.Close() //nolint:errcheck // repository push reports read failures.
 
-	if err := repo.Push(ctx, root, bytes.NewReader(data)); err != nil {
+	if err := repo.Push(ctx, root, rc); err != nil {
 		return wrapError(err)
-	}
-
-	return nil
-}
-
-// verifyDigest reports an ErrInvalid-wrapped error if data's digest does not match expected.
-// Push uses it as a defensive check that re-serializing a parsed manifest
-// or config via encoding/json reproduced the exact bytes its descriptor already commits to,
-// before anything is sent over the network
-// Pull uses it to check fetched content against the descriptor that named it,
-// since a registry's own claimed digest response header
-// is not itself proof the body bytes are correct.
-func verifyDigest(what string, data []byte, expected ocispec.Descriptor) error {
-	if err := ociblob.Verify(expected, data); err != nil {
-		return fmt.Errorf("%w: %s: %v", ErrInvalid, what, err)
 	}
 
 	return nil

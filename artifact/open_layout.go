@@ -110,6 +110,32 @@ func (r *layoutReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
 	return r.root, nil
 }
 
+// OpenBlob implements Reader.
+func (r *layoutReader) OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	path, err := layoutBlobPath(r.dir, desc)
+	if err != nil {
+		return nil, err
+	}
+
+	//nolint:gosec // path is confined by layoutBlobPath after digest validation.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open blob %s: %w", desc.Digest, err)
+	}
+
+	verified, err := newDigestVerifyingReadCloser(f, desc)
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+
+	return verified, nil
+}
+
 // Manifest implements Reader.
 func (r *layoutReader) Manifest(ctx context.Context) (*ocispec.Manifest, error) {
 	if err := ctx.Err(); err != nil {
@@ -183,20 +209,8 @@ func (r *layoutReader) OpenComponent(
 			continue
 		}
 
-		path, err := layoutBlobPath(r.dir, c.Descriptor)
+		verified, err := r.OpenBlob(ctx, c.Descriptor)
 		if err != nil {
-			return nil, ComponentDescriptor{}, fmt.Errorf("component %q: %w", component, err)
-		}
-
-		//nolint:gosec // path is confined by layoutBlobPath after digest validation.
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, ComponentDescriptor{}, fmt.Errorf("open component %q blob: %w", component, err)
-		}
-
-		verified, err := newDigestVerifyingReadCloser(f, c.Descriptor)
-		if err != nil {
-			_ = f.Close()
 			return nil, ComponentDescriptor{}, fmt.Errorf("component %q: %w", component, err)
 		}
 

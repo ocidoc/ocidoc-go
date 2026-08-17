@@ -33,6 +33,11 @@ type Reader interface {
 	// Root returns the descriptor of the artifact's root manifest.
 	Root(ctx context.Context) (ocispec.Descriptor, error)
 
+	// OpenBlob opens an OCI blob identified by desc without parsing or re-serializing it.
+	// The returned stream verifies its size and digest when read through EOF.
+	// The caller must close the returned reader.
+	OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error)
+
 	// Manifest returns the parsed root manifest.
 	Manifest(ctx context.Context) (*ocispec.Manifest, error)
 
