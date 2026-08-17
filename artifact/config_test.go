@@ -158,6 +158,22 @@ func TestLoadBuildConfigExplicitPath(t *testing.T) {
 	}
 }
 
+func TestLoadBuildConfigExplicitRelativePathUsesRoot(t *testing.T) {
+	root := t.TempDir()
+	custom := filepath.Join(root, "custom.yml")
+
+	writeFile(t, custom, "schemaVersion: v1beta\ncomponents:\n  support:\n    - /SUPPORT\n")
+
+	cfg, err := LoadBuildConfig(root, "custom.yml")
+	if err != nil {
+		t.Fatalf("LoadBuildConfig: %v", err)
+	}
+
+	if _, ok := cfg.Components[spec.ComponentSupport]; !ok {
+		t.Fatal("expected support component from config relative to root")
+	}
+}
+
 func TestLoadBuildConfigExplicitPathMissing(t *testing.T) {
 	root := t.TempDir()
 

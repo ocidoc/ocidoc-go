@@ -78,13 +78,18 @@ func DefaultBuildConfig() (*spec.BuildConfig, error) {
 // and returns its raw bytes together with a name used for error messages and format detection.
 func readBuildConfigSource(root, explicitPath string) ([]byte, string, error) {
 	if explicitPath != "" {
-		//nolint:gosec // caller explicitly selected this configuration path.
-		data, err := os.ReadFile(explicitPath)
-		if err != nil {
-			return nil, "", fmt.Errorf("read build config %s: %w", explicitPath, err)
+		configPath := explicitPath
+		if !filepath.IsAbs(configPath) {
+			configPath = filepath.Join(root, configPath)
 		}
 
-		return data, explicitPath, nil
+		//nolint:gosec // caller explicitly selected this configuration path.
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("read build config %s: %w", configPath, err)
+		}
+
+		return data, configPath, nil
 	}
 
 	var found []string
