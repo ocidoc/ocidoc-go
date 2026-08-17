@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/artifact"
@@ -81,6 +83,47 @@ func TestDocumentsRejectsMalformedCatalog(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(root, catalogFileName), []byte("not json"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := s.Documents(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Documents: got %v, want errors.Is(err, ErrInvalid)", err)
+	}
+}
+
+func TestDocumentsRejectsUnsupportedCatalogVersion(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	data, err := json.Marshal(catalogFile{
+		Version:   catalogVersion + 1,
+		Documents: map[digest.Digest]documentRecord{},
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, catalogFileName), data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := s.Documents(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Documents: got %v, want errors.Is(err, ErrInvalid)", err)
+	}
+}
+
+func TestDocumentsRejectsMissingCatalogVersion(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, catalogFileName), []byte(`{"documents":{}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 

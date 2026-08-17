@@ -94,6 +94,13 @@ func (s *Store) loadCatalog() (*catalogFile, error) {
 		return nil, fmt.Errorf("%w: parse %s: %v", ErrInvalid, catalogFileName, err)
 	}
 
+	if cat.Version != catalogVersion {
+		return nil, fmt.Errorf(
+			"%w: unsupported %s version %d, want %d",
+			ErrInvalid, catalogFileName, cat.Version, catalogVersion,
+		)
+	}
+
 	if cat.Documents == nil {
 		cat.Documents = map[digest.Digest]documentRecord{}
 	}
