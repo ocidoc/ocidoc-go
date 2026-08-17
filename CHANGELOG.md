@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning][].
 
 * Artifact graph transfers no longer re-serialize manifest or config JSON;
   they copy and verify the original OCI blobs.
+* `store.Remove` no longer performs implicit blob garbage collection;
+  unreachable content is reclaimed only by explicit store pruning.
 
 ### Removed
 

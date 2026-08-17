@@ -15,8 +15,7 @@ import (
 )
 
 // Remove forgets manifest in the catalog and deletes its root manifest from the OCI store.
-// Shared config and component blobs remain reachable from other manifests;
-// unreachable content is removed by the OCI store's graph GC.
+// Shared and otherwise unreachable blobs remain until Prune is explicitly called.
 func (s *Store) Remove(ctx context.Context, manifest digest.Digest) error {
 	if err := ociblob.ValidateDigest(manifest); err != nil {
 		return fmt.Errorf("%w: manifest: %v", ErrInvalid, err)

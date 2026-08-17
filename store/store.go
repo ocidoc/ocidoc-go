@@ -48,6 +48,9 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open OCI layout at %s: %w", root, err)
 	}
+	// Keep deletion separate from garbage collection. Remove forgets one root;
+	// Prune is the explicit operation that reclaims blobs no longer reachable from the store index.
+	ociStore.AutoGC = false
 
 	return &Store{
 		root: root,

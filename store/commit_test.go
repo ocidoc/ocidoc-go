@@ -6,6 +6,8 @@ package store
 
 import (
 	"testing"
+
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestCommitStoresGraphAndCatalog(t *testing.T) {
@@ -101,6 +103,27 @@ func TestRemoveDeletesCatalogEntryAndRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
+	reader, err := s.OpenDocument(t.Context(), committed.Manifest)
+	if err != nil {
+		t.Fatalf("OpenDocument before Remove: %v", err)
+	}
+	manifest, err := reader.Manifest(t.Context())
+	if err != nil {
+		_ = reader.Close()
+		t.Fatalf("Manifest: %v", err)
+	}
+	component, err := reader.Components(t.Context())
+	if err != nil {
+		_ = reader.Close()
+		t.Fatalf("Components: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if len(component) == 0 {
+		t.Fatal("expected a component before Remove")
+	}
+
 	if err := s.Remove(t.Context(), committed.Manifest); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
@@ -114,6 +137,28 @@ func TestRemoveDeletesCatalogEntryAndRoot(t *testing.T) {
 	}
 	if _, err := s.OpenDocument(t.Context(), committed.Manifest); err == nil {
 		t.Fatal("OpenDocument after Remove succeeded")
+	}
+	for _, desc := range append([]ocispec.Descriptor{manifest.Config}, component[0].Descriptor) {
+		exists, err := s.oci.Exists(t.Context(), desc)
+		if err != nil {
+			t.Fatalf("Exists(%s): %v", desc.Digest, err)
+		}
+		if !exists {
+			t.Fatalf("Remove unexpectedly deleted blob %s", desc.Digest)
+		}
+	}
+
+	if _, err := s.Prune(t.Context(), false); err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	for _, desc := range append([]ocispec.Descriptor{manifest.Config}, component[0].Descriptor) {
+		exists, err := s.oci.Exists(t.Context(), desc)
+		if err != nil {
+			t.Fatalf("Exists after Prune (%s): %v", desc.Digest, err)
+		}
+		if exists {
+			t.Fatalf("Prune left unreachable blob %s", desc.Digest)
+		}
 	}
 }
 
