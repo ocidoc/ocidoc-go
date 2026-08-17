@@ -34,6 +34,10 @@ type Origin struct {
 // Commit verifies each source blob against its descriptor
 // at the store boundary and preserves its original bytes.
 func (s *Store) Commit(ctx context.Context, source artifact.Reader, origin Origin) (*Document, error) {
+	if err := artifact.ValidateMetadata(ctx, source); err != nil {
+		return nil, err
+	}
+
 	var committed *Document
 	if err := s.withCatalogLock(ctx, func() error {
 		var err error

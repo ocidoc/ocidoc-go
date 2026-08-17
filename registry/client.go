@@ -74,6 +74,10 @@ func (c *Client) Resolve(ctx context.Context, reference string) (ocispec.Descrip
 // source's manifest, config and component descriptors are pushed exactly as source
 // already computed them rather than rebuilt from parsed values.
 func (c *Client) Push(ctx context.Context, source artifact.Reader, reference string) (*PushResult, error) {
+	if err := artifact.ValidateMetadata(ctx, source); err != nil {
+		return nil, err
+	}
+
 	_, tag, err := orasrepo.ParseReference(reference)
 	if err != nil {
 		return nil, wrapError(err)

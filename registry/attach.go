@@ -77,6 +77,10 @@ type AttachResult struct {
 // reuses source's config and component blobs,
 // and publishes the manifest in the subject's repository.
 func (c *Client) Attach(ctx context.Context, source artifact.Reader, subject string, opts AttachOptions) (*AttachResult, error) {
+	if err := artifact.ValidateMetadata(ctx, source); err != nil {
+		return nil, err
+	}
+
 	publication, err := normalizeAttachOptions(opts)
 	if err != nil {
 		return nil, err

@@ -5,14 +5,20 @@
 package registry
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
 
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/artifact"
+	"github.com/ocidoc/ocidoc-go/spec"
 )
 
 // LocationKind identifies one supported copy endpoint representation.
@@ -158,7 +164,50 @@ func (r subjectlessReader) Manifest(ctx context.Context) (*ocispec.Manifest, err
 
 	cloned := *manifest
 	cloned.Subject = nil
+	cloned.Annotations = maps.Clone(manifest.Annotations)
 	return &cloned, nil
+}
+
+// Root implements artifact.Reader for the transformed subjectless manifest.
+func (r subjectlessReader) Root(ctx context.Context) (ocispec.Descriptor, error) {
+	manifest, err := r.Manifest(ctx)
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("marshal subjectless manifest: %w", err)
+	}
+
+	return ocispec.Descriptor{
+		MediaType:    ocispec.MediaTypeImageManifest,
+		ArtifactType: spec.ArtifactType,
+		Digest:       digest.Canonical.FromBytes(data),
+		Size:         int64(len(data)),
+		Annotations:  maps.Clone(manifest.Annotations),
+	}, nil
+}
+
+// OpenBlob implements artifact.Reader for the transformed root manifest.
+func (r subjectlessReader) OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error) {
+	root, err := r.Root(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if desc.Digest != root.Digest {
+		return r.Reader.OpenBlob(ctx, desc)
+	}
+
+	manifest, err := r.Manifest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		return nil, fmt.Errorf("marshal subjectless manifest: %w", err)
+	}
+
+	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
 // validateCopyEndpoint rejects an empty value
