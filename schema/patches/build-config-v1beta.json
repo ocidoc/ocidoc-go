@@ -1,9 +1,21 @@
 {
-  "$id": "https://ocidoc.org/schema/build-config-v1beta.json",
   "$defs": {
     "BuildConfig": {
       "properties": {
+        "annotations": {
+          "examples": [
+            {
+              "org.opencontainers.image.title": "Project documentation",
+              "org.opencontainers.image.version": "1.2.3"
+            }
+          ]
+        },
         "components": {
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
+          },
           "examples": [
             {
               "documentation": {

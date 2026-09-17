@@ -9,6 +9,12 @@
             "type": "string"
           },
           "description": "Annotations adds custom key/value pairs to the built artifact's root OCI manifest.\nKeys starting with `org.ocidoc.` are reserved for OCIDoc itself and rejected here.",
+          "examples": [
+            {
+              "org.opencontainers.image.title": "Project documentation",
+              "org.opencontainers.image.version": "1.2.3"
+            }
+          ],
           "type": "object",
           "x-order": "2"
         },
@@ -50,6 +56,11 @@
               }
             }
           ],
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$",
+            "type": "string"
+          },
           "type": "object",
           "x-order": "3"
         },
@@ -61,6 +72,9 @@
         "ignore": {
           "description": "Ignore lists path rules excluded from every component, applied after component matching.\nA rule prefixed with `!` is a negation:\nit restores a path an earlier ignore rule would otherwise have excluded.\nIgnore rules are useful for repository metadata or generated files that match a broad component rule.",
           "items": {
+            "examples": [
+              "/.git/**"
+            ],
             "type": "string"
           },
           "type": "array",
@@ -202,6 +216,9 @@
         },
         "variant": {
           "description": "Variant distinguishes multiple documents that share the same ID, for example `operator` versus `user`.\nOmit it when only one variant of this document exists.",
+          "examples": [
+            "operator"
+          ],
           "type": "string",
           "x-order": "2"
         }

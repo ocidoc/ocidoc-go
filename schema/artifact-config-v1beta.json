@@ -7,9 +7,6 @@
         "$schema": {
           "const": "https://ocidoc.org/schema/artifact-config-v1beta.json",
           "description": "Schema, when set, must equal this format's canonical JSON Schema identifier.\nIt is optional: a reader must not reject a config that omits it.",
-          "examples": [
-            "https://ocidoc.org/schema/artifact-config-v1beta.json"
-          ],
           "type": "string",
           "x-order": "2"
         },
@@ -45,6 +42,11 @@
               }
             }
           ],
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$",
+            "type": "string"
+          },
           "type": "object",
           "x-order": "3"
         },

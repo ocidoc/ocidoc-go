@@ -52,7 +52,6 @@ is optional: a reader must not reject a config that omits it.
 | Type | `string` |
 | Required | no |
 | Const | `https://ocidoc.org/schema/artifact-config-v1beta.json` |
-| Examples | `https://ocidoc.org/schema/artifact-config-v1beta.json` |
 
 ### ArtifactConfig.components
 
@@ -81,6 +80,7 @@ required, and the set must match the manifest's component layers exactly.
 | Required | yes |
 | Examples | 1 structured example |
 | Additional properties reference | [`ComponentConfig`](#componentconfig) (`#/$defs/ComponentConfig`) |
+| Property names type | `string` |
 | Property names constraints | `pattern=^(?:documentation\|license\|changelog\|release-notes\|security\|contributing\|code-of-conduct\|support\|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$` |
 | Constraints | `minProperties=1` |
 

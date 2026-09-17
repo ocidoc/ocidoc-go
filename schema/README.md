@@ -26,6 +26,15 @@ and `spec.ArtifactConfigSchemaID`.
 Corresponding generated Markdown reference documentation
 and example configs live under `../docs/`.
 
+## Schema overlays
+
+The generated base schemas come from the Go types. The merge patches under
+`patches/` add schema-only metadata that reflection cannot derive from dynamic
+maps, including component-name constraints and structured examples.
+
+Canonical root `$id` values are supplied directly by `mod2schema.root_id` in
+`schemadoc.build.yaml`; they are not maintained in the patches.
+
 ## Purpose
 
 These schemas exist for IDE/editor completion and validation,
@@ -39,12 +48,3 @@ the schema favors IDE-friendly structural constraints,
 while `Validate()` remains authoritative for semantics requiring context
 the schema alone cannot express (for example, an entrypoint belonging
 to its component's actually-matched files).
-
-## Patches
-
-`schema/patches/` holds small merge patches applied after reflection
-for constraints reflection alone cannot express cleanly:
-public `$id`, dynamic component-name validation,
-non-empty component maps and rule lists,
-and the artifact config's canonical optional `$schema` value.
-See `schemadoc.build.yaml` for how each patch is applied.

@@ -5,6 +5,7 @@ mod2schema:
   package: github.com/ocidoc/ocidoc-go/spec
   type: BuildConfig
   key_namer: none
+  root_id: https://ocidoc.org/schema/build-config-v1beta.json
 
 merge:
   patches:
@@ -31,6 +32,7 @@ mod2schema:
   package: github.com/ocidoc/ocidoc-go/spec
   type: ArtifactConfig
   key_namer: none
+  root_id: https://ocidoc.org/schema/artifact-config-v1beta.json
 
 merge:
   patches:

@@ -56,6 +56,7 @@ rejected here.
 | --- | --- |
 | Type | `object` |
 | Required | no |
+| Examples | 1 structured example |
 | Additional properties type | `string` |
 
 ### BuildConfig.components
@@ -87,6 +88,7 @@ more than one component.
 | Required | yes |
 | Examples | 1 structured example |
 | Additional properties reference | [`ComponentBuildConfig`](#componentbuildconfig) (`#/$defs/ComponentBuildConfig`) |
+| Property names type | `string` |
 | Property names constraints | `pattern=^(?:documentation\|license\|changelog\|release-notes\|security\|contributing\|code-of-conduct\|support\|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$` |
 | Constraints | `minProperties=1` |
 
@@ -128,8 +130,8 @@ repository metadata or generated files that match a broad component rule.
 | --- | --- |
 | Type | `array` |
 | Required | no |
-| Examples | 1 structured example |
 | Items type | `string` |
+| Items examples | `/.git/**` |
 
 ## ComponentBuildConfig
 
@@ -386,6 +388,7 @@ Variant distinguishes multiple documents that share the same ID, for example
 | --- | --- |
 | Type | `string` |
 | Required | no |
+| Examples | `operator` |
 
 ## Example yaml document
 
@@ -398,7 +401,8 @@ schemaVersion: v1beta
 # Annotations adds custom key/value pairs to the built artifact's root OCI manifest.
 # Keys starting with `org.ocidoc.` are reserved for OCIDoc itself and rejected here.
 annotations:
-  example: <string>
+  org.opencontainers.image.title: Project documentation
+  org.opencontainers.image.version: 1.2.3
 # Components maps component names to their source selection
 # and optional localized document sets.
 # Built-in v1beta component names:
@@ -505,7 +509,8 @@ document:
   id: default
   # Variant distinguishes multiple documents that share the same ID, for example `operator` versus `user`.
   # Omit it when only one variant of this document exists.
-  variant: <string>
+  # Example: operator
+  variant: operator
 # Ignore lists path rules excluded from every component, applied after component matching.
 # A rule prefixed with `!` is a negation:
 # it restores a path an earlier ignore rule would otherwise have excluded.

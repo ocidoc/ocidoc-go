@@ -49,7 +49,7 @@ type BuildConfig struct {
 	// A rule prefixed with `!` is a negation:
 	// it restores a path an earlier ignore rule would otherwise have excluded.
 	// Ignore rules are useful for repository metadata or generated files that match a broad component rule.
-	Ignore []string `json:"ignore,omitempty" yaml:"ignore,omitempty" jsonschema_extras:"x-order=6"`
+	Ignore []string `json:"ignore,omitempty" yaml:"ignore,omitempty" jsonschema_extras:"x-order=6" jsonschema:"example=/.git/**"`
 }
 
 // ComponentBuildConfig selects one component's source files and optional localized document sets.
@@ -129,11 +129,11 @@ type CompressionSettings struct {
 // DocumentSettings sets the identity shown for the document artifact.
 type DocumentSettings struct {
 	// ID identifies this artifact among multiple documentation artifacts that may be attached to the same subject.
-	ID string `json:"id,omitempty" yaml:"id,omitempty" jsonschema_extras:"x-order=1" jsonschema:"default=default"`
+	ID string `json:"id,omitempty" yaml:"id,omitempty" jsonschema:"default=default" jsonschema_extras:"x-order=1"`
 
 	// Variant distinguishes multiple documents that share the same ID, for example `operator` versus `user`.
 	// Omit it when only one variant of this document exists.
-	Variant string `json:"variant,omitempty" yaml:"variant,omitempty" jsonschema_extras:"x-order=2"`
+	Variant string `json:"variant,omitempty" yaml:"variant,omitempty" jsonschema:"example=operator" jsonschema_extras:"x-order=2"`
 }
 
 // ArtifactConfig is the configuration metadata stored inside an OCIDoc artifact.
@@ -160,7 +160,7 @@ type ArtifactConfig struct {
 
 	// Schema, when set, must equal this format's canonical JSON Schema identifier.
 	// It is optional: a reader must not reject a config that omits it.
-	Schema string `json:"$schema,omitempty" yaml:"$schema,omitempty" jsonschema_extras:"x-order=2" jsonschema:"example=https://ocidoc.org/schema/artifact-config-v1beta.json"`
+	Schema string `json:"$schema,omitempty" yaml:"$schema,omitempty" jsonschema_extras:"x-order=2"`
 
 	// SchemaVersion is the artifact config format version.
 	// The only currently supported value is "v1beta".
