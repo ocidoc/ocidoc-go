@@ -31,7 +31,7 @@ func TestLoadBuildConfigEmbeddedDefault(t *testing.T) {
 		spec.ComponentReleaseNotes, spec.ComponentSecurity, spec.ComponentContributing,
 		spec.ComponentCodeOfConduct, spec.ComponentSupport,
 	} {
-		if len(cfg.Components[want]) == 0 {
+		if len(cfg.Components[want].Paths) == 0 {
 			t.Errorf("embedded default: expected non-empty rules for component %q", want)
 		}
 	}
@@ -70,7 +70,8 @@ func TestLoadBuildConfigConventionalYAML(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `)
 
 	cfg, err := LoadBuildConfig(root, "")
@@ -78,7 +79,7 @@ components:
 		t.Fatalf("LoadBuildConfig: %v", err)
 	}
 
-	if got := cfg.Components[spec.ComponentDocumentation]; len(got) != 1 || got[0] != "/README.md" {
+	if got := cfg.Components[spec.ComponentDocumentation].Paths; len(got) != 1 || got[0] != "/README.md" {
 		t.Fatalf("got documentation rules %v, want [/README.md]", got)
 	}
 }
@@ -88,7 +89,7 @@ func TestLoadBuildConfigConventionalJSON(t *testing.T) {
 
 	writeFile(t, filepath.Join(root, "ocidoc.json"), `{
 		"schemaVersion": "v1beta",
-		"components": {"license": ["/LICENSE"]}
+		"components": {"license": {"paths": ["/LICENSE"]}}
 	}`)
 
 	cfg, err := LoadBuildConfig(root, "")
@@ -96,7 +97,7 @@ func TestLoadBuildConfigConventionalJSON(t *testing.T) {
 		t.Fatalf("LoadBuildConfig: %v", err)
 	}
 
-	if got := cfg.Components[spec.ComponentLicense]; len(got) != 1 || got[0] != "/LICENSE" {
+	if got := cfg.Components[spec.ComponentLicense].Paths; len(got) != 1 || got[0] != "/LICENSE" {
 		t.Fatalf("got license rules %v, want [/LICENSE]", got)
 	}
 }
@@ -109,7 +110,8 @@ schemaVersion: v1beta
 unexpected: true
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `)
 
 	if _, err := LoadBuildConfig(root, ""); err == nil {
@@ -123,7 +125,7 @@ func TestLoadBuildConfigRejectsUnknownJSONField(t *testing.T) {
 	writeFile(t, filepath.Join(root, "ocidoc.json"), `{
 		"schemaVersion": "v1beta",
 		"unexpected": true,
-		"components": {"documentation": ["/README.md"]}
+		"components": {"documentation": {"paths": ["/README.md"]}}
 	}`)
 
 	if _, err := LoadBuildConfig(root, ""); err == nil {
@@ -134,8 +136,8 @@ func TestLoadBuildConfigRejectsUnknownJSONField(t *testing.T) {
 func TestLoadBuildConfigRejectsMultipleConventionalFiles(t *testing.T) {
 	root := t.TempDir()
 
-	writeFile(t, filepath.Join(root, "ocidoc.yaml"), "schemaVersion: v1beta\ncomponents:\n  license:\n    - /LICENSE\n")
-	writeFile(t, filepath.Join(root, "ocidoc.json"), `{"schemaVersion":"v1beta","components":{"license":["/LICENSE"]}}`)
+	writeFile(t, filepath.Join(root, "ocidoc.yaml"), "schemaVersion: v1beta\ncomponents:\n  license:\n    paths:\n      - /LICENSE\n")
+	writeFile(t, filepath.Join(root, "ocidoc.json"), `{"schemaVersion":"v1beta","components":{"license":{"paths":["/LICENSE"]}}}`)
 
 	if _, err := LoadBuildConfig(root, ""); err == nil {
 		t.Fatal("expected error when multiple conventional config files exist")
@@ -146,7 +148,7 @@ func TestLoadBuildConfigExplicitPath(t *testing.T) {
 	root := t.TempDir()
 	custom := filepath.Join(root, "custom.yml")
 
-	writeFile(t, custom, "schemaVersion: v1beta\ncomponents:\n  support:\n    - /SUPPORT\n")
+	writeFile(t, custom, "schemaVersion: v1beta\ncomponents:\n  support:\n    paths:\n      - /SUPPORT\n")
 
 	cfg, err := LoadBuildConfig(root, custom)
 	if err != nil {
@@ -162,7 +164,7 @@ func TestLoadBuildConfigExplicitRelativePathUsesRoot(t *testing.T) {
 	root := t.TempDir()
 	custom := filepath.Join(root, "custom.yml")
 
-	writeFile(t, custom, "schemaVersion: v1beta\ncomponents:\n  support:\n    - /SUPPORT\n")
+	writeFile(t, custom, "schemaVersion: v1beta\ncomponents:\n  support:\n    paths:\n      - /SUPPORT\n")
 
 	cfg, err := LoadBuildConfig(root, "custom.yml")
 	if err != nil {
@@ -205,7 +207,7 @@ func TestLoadBuildConfigRejectsMalformedYAML(t *testing.T) {
 func TestLoadBuildConfigRejectsAdditionalYAMLDocument(t *testing.T) {
 	root := t.TempDir()
 
-	writeFile(t, filepath.Join(root, "ocidoc.yaml"), "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n---\nstrict: true\n")
+	writeFile(t, filepath.Join(root, "ocidoc.yaml"), "schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n---\nstrict: true\n")
 
 	if _, err := LoadBuildConfig(root, ""); err == nil {
 		t.Fatal("expected parse error for an additional YAML document")
@@ -215,7 +217,7 @@ func TestLoadBuildConfigRejectsAdditionalYAMLDocument(t *testing.T) {
 func TestLoadBuildConfigRejectsAdditionalJSONDocument(t *testing.T) {
 	root := t.TempDir()
 
-	writeFile(t, filepath.Join(root, "ocidoc.json"), `{"schemaVersion":"v1beta","components":{"documentation":["/README.md"]}} {"strict":true}`)
+	writeFile(t, filepath.Join(root, "ocidoc.json"), `{"schemaVersion":"v1beta","components":{"documentation":{"paths":["/README.md"]}}} {"strict":true}`)
 
 	if _, err := LoadBuildConfig(root, ""); err == nil {
 		t.Fatal("expected parse error for an additional JSON document")

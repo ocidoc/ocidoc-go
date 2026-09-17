@@ -47,7 +47,8 @@ func BuildArtifact(t *testing.T, content string) artifact.Reader {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `,
 		"README.md": content,
 	})

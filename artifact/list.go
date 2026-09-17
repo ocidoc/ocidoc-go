@@ -122,18 +122,21 @@ func scanComponentFiles(ctx context.Context, r Reader, c ComponentDescriptor, op
 	if err != nil {
 		return nil, err
 	}
-	//nolint:errcheck // read-only handle; a close error here would not change the result already computed.
-	defer rc.Close()
 
 	decompressed, err := compression.NewReader(rc, c.Descriptor.MediaType)
 	if err != nil {
+		_ = rc.Close()
 		return nil, fmt.Errorf("component %q: %w", c.Type, err)
 	}
-	//nolint:errcheck // read-only handle; a close error here would not change the result already computed.
-	defer decompressed.Close()
 
 	entries, _, err := archive.Scan(ctx, decompressed, opts)
 	if err != nil {
+		_ = decompressed.Close()
+		_ = rc.Close()
+		return nil, fmt.Errorf("component %q: %w", c.Type, err)
+	}
+
+	if err := finishComponentStream(ctx, decompressed, rc); err != nil {
 		return nil, fmt.Errorf("component %q: %w", c.Type, err)
 	}
 

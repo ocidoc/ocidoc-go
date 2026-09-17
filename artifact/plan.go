@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
+	"strings"
 
 	"github.com/ocidoc/ocidoc-go/internal/pathplan"
 	"github.com/ocidoc/ocidoc-go/spec"
@@ -60,6 +62,9 @@ type BuildPlan struct {
 	// Entrypoints maps components to their resolved bundle-relative entrypoint paths.
 	Entrypoints map[spec.ComponentType]string
 
+	// Locales maps components to locale plans with sorted, deduplicated document paths.
+	Locales map[spec.ComponentType]map[string]LocalePlan
+
 	// Document is the effective document identity with defaults applied.
 	Document spec.DocumentSettings
 
@@ -68,6 +73,18 @@ type BuildPlan struct {
 
 	// Settings is the effective build settings with defaults applied.
 	Settings spec.EffectiveSettings
+}
+
+// LocalePlan is one component locale after source rules and entrypoints resolve.
+type LocalePlan struct {
+	// Entrypoint is the resolved primary document for this locale.
+	Entrypoint string
+
+	// Paths contains sorted bundle-relative document paths in this locale.
+	Paths []string
+
+	// Default marks the effective fallback locale for the component.
+	Default bool
 }
 
 // EmptyComponentsError reports declared components
@@ -93,8 +110,7 @@ func (e *EmptyComponentsError) Unwrap() error {
 // resolves component ownership - including Markdown dependencies -
 // and entrypoints, and returns the complete result.
 // It performs no registry requests and writes nothing;
-// it only reads under root. ctx is checked once before that work begins;
-// Plan's own work is comparatively fast, so it is not checked again partway through.
+// it only reads under root. ctx is checked during source walks and dependency waves.
 //
 // Plan returns an error when:
 //
@@ -116,28 +132,42 @@ func Plan(ctx context.Context, root string, opts PlanOptions) (*BuildPlan, error
 		return nil, err
 	}
 
-	annotations := mergeStrings(cfg.Annotations, opts.Annotations)
-	if err := spec.ValidateUserAnnotations(annotations); err != nil {
+	cfg = cloneBuildConfig(cfg)
+	cfg.Annotations = mergeStrings(cfg.Annotations, opts.Annotations)
+	for component, entrypoint := range opts.Entrypoints {
+		selected, ok := cfg.Components[component]
+		if !ok {
+			return nil, fmt.Errorf("%w: entrypoint override references undeclared component %q", spec.ErrInvalid, component)
+		}
+
+		selected.Entrypoint = entrypoint
+		cfg.Components[component] = selected
+	}
+	cfg.Document = mergeDocument(cfg.Document, opts.Document)
+	cfg.Ignore = append(cfg.Ignore, opts.Ignore...)
+	cfg.Settings = *mergeSettings(cfg.Settings, opts.Settings)
+	if err := spec.ValidateBuildConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := spec.ValidateUserAnnotations(cfg.Annotations); err != nil {
 		return nil, err
 	}
 
-	if len(opts.Ignore) > 0 {
-		cfg.Ignore = append(append([]string{}, cfg.Ignore...), opts.Ignore...)
-	}
+	settings := spec.ResolveSettings(&cfg.Settings)
+	cfg.Settings = effectiveBuildSettings(settings)
+	cfg.Document = spec.ResolveDocument(cfg.Document)
 
 	matchers, err := pathplan.Compile(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	ownership, err := pathplan.Plan(root, matchers)
+	ownership, err := pathplan.PlanContext(ctx, root, matchers)
 	if err != nil {
 		return nil, err
 	}
 
-	settings := spec.ResolveSettings(mergeSettings(cfg.Settings, opts.Settings))
-
-	ownership, dependencyWarnings, err := pathplan.DiscoverDependencies(root, ownership, pathplan.DependencyOptions{
+	ownership, dependencyWarnings, err := pathplan.DiscoverDependenciesContext(ctx, root, ownership, pathplan.DependencyOptions{
 		Ignore: matchers.Ignore,
 		Strict: settings.Strict,
 	})
@@ -149,11 +179,30 @@ func Plan(ctx context.Context, root string, opts PlanOptions) (*BuildPlan, error
 		return nil, fmt.Errorf("%w: no component matched any file", spec.ErrInvalid)
 	}
 
-	entrypointOverrides := mergeEntrypoints(cfg.Entrypoints, opts.Entrypoints)
+	explicitEntrypoints := make(map[spec.ComponentType]string, len(cfg.Components))
+	for component, config := range cfg.Components {
+		if config.Entrypoint != "" {
+			explicitEntrypoints[component] = config.Entrypoint
+		}
+	}
 
-	entrypoints, err := pathplan.ResolveEntrypoints(ownership, entrypointOverrides)
+	entrypoints, err := pathplan.ResolveEntrypoints(ownership, explicitEntrypoints)
 	if err != nil {
 		return nil, err
+	}
+
+	locales, err := pathplan.ClassifyLocales(cfg.Components, ownership)
+	if err != nil {
+		return nil, err
+	}
+
+	localePlans, localeWarnings, err := resolveLocalePlans(cfg.Components, entrypoints, locales)
+	if err != nil {
+		return nil, err
+	}
+
+	if settings.Strict && len(localeWarnings) > 0 {
+		return nil, fmt.Errorf("%w: empty locales in strict mode: %v", spec.ErrInvalid, localeWarnings)
 	}
 
 	emptyWarnings, err := emptyComponentWarnings(
@@ -162,24 +211,140 @@ func Plan(ctx context.Context, root string, opts PlanOptions) (*BuildPlan, error
 	if err != nil {
 		return nil, err
 	}
-	warnings := slices.Concat(dependencyWarnings, emptyWarnings)
+	warnings := slices.Concat(dependencyWarnings, emptyWarnings, localeWarnings)
 
 	return &BuildPlan{
 		Config:      cfg,
 		Settings:    settings,
-		Document:    spec.ResolveDocument(mergeDocument(cfg.Document, opts.Document)),
-		Annotations: annotations,
+		Document:    cfg.Document,
+		Annotations: cfg.Annotations,
 		Ownership:   map[spec.ComponentType][]string(ownership),
 		Entrypoints: entrypoints,
 		Warnings:    warnings,
+		Locales:     localePlans,
 	}, nil
+}
+
+// resolveLocalePlans resolves locale ownership, fallback, and entrypoints.
+func resolveLocalePlans(
+	components map[spec.ComponentType]spec.ComponentBuildConfig,
+	entrypoints map[spec.ComponentType]string,
+	locales map[spec.ComponentType]map[string][]string,
+) (map[spec.ComponentType]map[string]LocalePlan, []string, error) {
+	resolved := make(map[spec.ComponentType]map[string]LocalePlan, len(locales))
+	var warnings []string
+
+	for component, componentLocales := range locales {
+		if len(componentLocales) == 0 {
+			continue
+		}
+
+		keys := make([]string, 0, len(componentLocales))
+		for key := range componentLocales {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		defaultLocale := keys[0]
+		for _, key := range keys {
+			if components[component].Locales[key].Default {
+				defaultLocale = key
+				break
+			}
+		}
+
+		plans := make(map[string]LocalePlan, len(keys))
+		for _, key := range keys {
+			paths := append([]string(nil), componentLocales[key]...)
+			plan := LocalePlan{Default: key == defaultLocale, Paths: paths}
+			if len(paths) == 0 {
+				warnings = append(warnings, fmt.Sprintf("component %q locale %q matched no documents", component, key))
+				plans[key] = plan
+				continue
+			}
+
+			localeConfig := components[component].Locales[key]
+			entrypoint := strings.TrimPrefix(localeConfig.Entrypoint, "/")
+			if entrypoint != "" && !slices.Contains(paths, entrypoint) {
+				return nil, nil, fmt.Errorf(
+					"%w: locale entrypoint %q for component %q and locale %q is not among locale paths",
+					spec.ErrInvalid, localeConfig.Entrypoint, component, key,
+				)
+			}
+
+			if entrypoint == "" && slices.Contains(paths, entrypoints[component]) {
+				entrypoint = entrypoints[component]
+			}
+			if entrypoint == "" {
+				entrypoint, _ = pathplan.DetectEntrypoint(component, paths)
+			}
+
+			plan.Entrypoint = entrypoint
+			plans[key] = plan
+		}
+
+		resolved[component] = plans
+	}
+
+	return resolved, warnings, nil
+}
+
+// cloneBuildConfig returns a deep copy of a build configuration.
+func cloneBuildConfig(cfg *spec.BuildConfig) *spec.BuildConfig {
+	copyConfig := *cfg
+	copyConfig.Components = make(map[spec.ComponentType]spec.ComponentBuildConfig, len(cfg.Components))
+
+	for name, component := range cfg.Components {
+		component.Paths = append([]string(nil), component.Paths...)
+		locales := component.Locales
+		component.Locales = make(map[string]spec.BuildLocaleConfig, len(locales))
+
+		for locale, config := range locales {
+			config.Paths = append([]string(nil), config.Paths...)
+			component.Locales[locale] = config
+		}
+
+		copyConfig.Components[name] = component
+	}
+
+	copyConfig.Annotations = mergeStrings(cfg.Annotations, nil)
+	copyConfig.Ignore = append([]string(nil), cfg.Ignore...)
+
+	if cfg.Settings.Compression != nil {
+		compression := *cfg.Settings.Compression
+		if compression.Level != nil {
+			level := *compression.Level
+			compression.Level = &level
+		}
+		copyConfig.Settings.Compression = &compression
+	}
+
+	if cfg.Settings.Strict != nil {
+		strict := *cfg.Settings.Strict
+		copyConfig.Settings.Strict = &strict
+	}
+
+	return &copyConfig
+}
+
+// effectiveBuildSettings converts resolved settings back to public config form.
+func effectiveBuildSettings(settings spec.EffectiveSettings) spec.BuildSettings {
+	strict := settings.Strict
+	level := settings.Compression.Level
+	return spec.BuildSettings{
+		Strict: &strict,
+		Compression: &spec.CompressionSettings{
+			Type:  settings.Compression.Type,
+			Level: &level,
+		},
+	}
 }
 
 // emptyComponentWarnings finds declared components with no planned files.
 // The embedded default config declares optional conventional components,
 // so their absence is silent unless strict mode was explicitly requested.
 func emptyComponentWarnings(
-	declared map[spec.ComponentType][]string,
+	declared map[spec.ComponentType]spec.ComponentBuildConfig,
 	ownership pathplan.Ownership,
 	strict bool,
 	embeddedDefault bool,
@@ -263,19 +428,6 @@ func mergeCompressionSettings(base, override *spec.CompressionSettings) *spec.Co
 	}
 
 	return &merged
-}
-
-// mergeEntrypoints overlays override onto base, key by key.
-func mergeEntrypoints(
-	base map[spec.ComponentType]string,
-	override map[spec.ComponentType]string,
-) map[spec.ComponentType]string {
-	merged := make(map[spec.ComponentType]string, len(base)+len(override))
-
-	maps.Copy(merged, base)
-	maps.Copy(merged, override)
-
-	return merged
 }
 
 // mergeStrings overlays override onto base, key by key.

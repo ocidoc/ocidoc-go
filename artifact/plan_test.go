@@ -39,9 +39,11 @@ func TestPlanBasic(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   license:
-    - /LICENSE
+    paths:
+      - /LICENSE
 `,
 		"README.md": "# hi",
 		"LICENSE":   "MIT",
@@ -77,6 +79,66 @@ components:
 	}
 }
 
+func TestPlanResolvesLocalesAfterOwnership(t *testing.T) {
+	root := t.TempDir()
+	writeConfigTree(t, root, map[string]string{
+		"ocidoc.yaml": `
+schemaVersion: v1beta
+components:
+  documentation:
+    paths:
+      - /docs/**
+    locales:
+      en:
+        paths:
+          - /docs/**
+          - "!/docs/ru.md"
+      ru:
+        paths:
+          - /docs/ru.md
+`,
+		"docs/en.md":    "# en",
+		"docs/ru.md":    "# ru",
+		"docs/logo.svg": "svg",
+	})
+
+	plan, err := Plan(t.Context(), root, PlanOptions{})
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if got, want := plan.Locales[spec.ComponentDocumentation]["en"].Paths, []string{"docs/en.md"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("en locale = %v, want %v", got, want)
+	}
+	if got, want := plan.Locales[spec.ComponentDocumentation]["ru"].Paths, []string{"docs/ru.md"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ru locale = %v, want %v", got, want)
+	}
+}
+
+func TestPlanStrictRejectsLocaleWithoutDocuments(t *testing.T) {
+	root := t.TempDir()
+	writeConfigTree(t, root, map[string]string{
+		"ocidoc.yaml": `
+schemaVersion: v1beta
+settings:
+  strict: true
+components:
+  documentation:
+    paths:
+      - /README.md
+    locales:
+      ru:
+        paths:
+          - /docs/ru.md
+`,
+		"README.md": "# en",
+	})
+
+	_, err := Plan(t.Context(), root, PlanOptions{})
+	if !errors.Is(err, spec.ErrInvalid) {
+		t.Fatalf("Plan error = %v, want errors.Is(err, spec.ErrInvalid)", err)
+	}
+}
+
 func TestPlanEmbeddedDefaultDoesNotWarnForAbsentOptionalComponents(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
@@ -97,7 +159,7 @@ func TestPlanEmbeddedDefaultDoesNotWarnForAbsentOptionalComponents(t *testing.T)
 func TestPlanRejectsCanceledContext(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
-		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n",
+		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n",
 		"README.md":   "# hi",
 	})
 
@@ -118,7 +180,8 @@ document:
   id: default
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `,
 		"README.md": "# hi",
 	})
@@ -145,7 +208,8 @@ annotations:
   org.opencontainers.image.title: Old title
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `,
 		"README.md": "# hi",
 	})
@@ -169,8 +233,9 @@ func TestPlanIgnoreOverrideAppendsAfterConfig(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
-    - /docs/**
+    paths:
+      - /README.md
+      - /docs/**
 `,
 		"README.md":        "# hi",
 		"docs/guide.md":    "guide",
@@ -213,7 +278,8 @@ settings:
     level: 6
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `,
 		"README.md": "# hi",
 	})
@@ -258,7 +324,8 @@ settings:
     level: 19
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `,
 		"README.md": "# hi",
 	})
@@ -295,7 +362,8 @@ settings:
     level: 19
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `,
 		"README.md": "# hi",
 	})
@@ -317,7 +385,7 @@ components:
 func TestPlanRejectsReservedAnnotationOverride(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
-		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n",
+		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n",
 		"README.md":   "# hi",
 	})
 
@@ -338,12 +406,12 @@ func TestPlanEntrypointOverrideWins(t *testing.T) {
 	writeConfigTree(t, root, map[string]string{
 		"ocidoc.yaml": `
 schemaVersion: v1beta
-entrypoints:
-  documentation: /README.md
 components:
   documentation:
-    - /README.md
-    - /docs/index.md
+    entrypoint: /README.md
+    paths:
+      - /README.md
+      - /docs/index.md
 `,
 		"README.md":     "# hi",
 		"docs/index.md": "# index",
@@ -368,9 +436,11 @@ func TestPlanNonStrictEmptyComponentWarns(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   security:
-    - /SECURITY.md
+    paths:
+      - /SECURITY.md
 `,
 		"README.md": "# hi",
 	})
@@ -394,9 +464,11 @@ settings:
   strict: true
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   security:
-    - /SECURITY.md
+    paths:
+      - /SECURITY.md
 `,
 		"README.md": "# hi",
 	})
@@ -424,7 +496,7 @@ components:
 func TestPlanRejectsWhenNoComponentMatchesAnything(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
-		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n",
+		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n",
 	})
 
 	_, err := Plan(t.Context(), root, PlanOptions{})
@@ -440,7 +512,7 @@ func TestPlanRejectsWhenNoComponentMatchesAnything(t *testing.T) {
 func TestPlanDiscoversMarkdownDependencies(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
-		"ocidoc.yaml":   "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n",
+		"ocidoc.yaml":   "schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n",
 		"README.md":     "[guide](docs/guide.md)\n",
 		"docs/guide.md": "guide",
 	})
@@ -462,7 +534,7 @@ func TestPlanDiscoversMarkdownDependencies(t *testing.T) {
 func TestPlanWarnsForInvalidDependencyByDefault(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
-		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n",
+		"ocidoc.yaml": "schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n",
 		"README.md":   "[missing](missing.md)\n",
 	})
 
@@ -478,7 +550,7 @@ func TestPlanWarnsForInvalidDependencyByDefault(t *testing.T) {
 func TestPlanStrictRejectsInvalidDependency(t *testing.T) {
 	root := t.TempDir()
 	writeConfigTree(t, root, map[string]string{
-		"ocidoc.yaml": "schemaVersion: v1beta\nsettings:\n  strict: true\ncomponents:\n  documentation:\n    - /README.md\n",
+		"ocidoc.yaml": "schemaVersion: v1beta\nsettings:\n  strict: true\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n",
 		"README.md":   "[missing](missing.md)\n",
 	})
 

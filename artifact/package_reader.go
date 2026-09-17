@@ -100,7 +100,7 @@ func copyBlob(ctx context.Context, reader Reader, desc ocispec.Descriptor, path 
 		return err
 	}
 
-	_, copyErr := io.Copy(target, source)
+	_, copyErr := io.Copy(target, contextReader{ctx: ctx, reader: source})
 	closeSourceErr := source.Close()
 	closeTargetErr := target.Close()
 	if copyErr != nil {
@@ -113,6 +113,7 @@ func copyBlob(ctx context.Context, reader Reader, desc ocispec.Descriptor, path 
 	return closeTargetErr
 }
 
+// blobPath returns the OCI layout path for a blob digest.
 func blobPath(layoutDir string, d digest.Digest) string {
 	return filepath.Join(layoutDir, "blobs", d.Algorithm().String(), d.Encoded())
 }

@@ -256,6 +256,7 @@ func (c *Client) copySubjectToSubject(
 	return attached.Manifest, discovered.Manifest, publication, nil
 }
 
+// isLocal reports whether kind identifies a local source or destination.
 func isLocal(kind LocationKind) bool {
 	return kind == LocationArchive || kind == LocationLayout
 }

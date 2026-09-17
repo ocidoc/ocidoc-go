@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
@@ -46,12 +49,16 @@ func diffFixtureFiles() map[string]string {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
+      - /docs/en.md
   license:
-    - /LICENSE
+    paths:
+      - /LICENSE
 `,
-		"README.md": "# hi",
-		"LICENSE":   "MIT",
+		"README.md":  "# hi",
+		"docs/en.md": "# en",
+		"LICENSE":    "MIT",
 	}
 }
 
@@ -100,6 +107,113 @@ func TestDiffDetectsAnnotationChange(t *testing.T) {
 
 	if !found {
 		t.Fatalf("expected an added org.example.custom annotation diff, got %+v", result.Annotations)
+	}
+}
+
+func TestDiffDetectsLocaleMembershipChangeWithoutComponentDiff(t *testing.T) {
+	result := diffLocales(
+		map[spec.ComponentType]spec.ComponentConfig{
+			spec.ComponentDocumentation: {Locales: map[string]spec.ArtifactLocaleConfig{
+				"en": {Files: []string{"README.md"}},
+			}},
+		},
+		map[spec.ComponentType]spec.ComponentConfig{
+			spec.ComponentDocumentation: {Locales: map[string]spec.ArtifactLocaleConfig{
+				"en": {Files: []string{"README.md"}},
+				"ru": {Files: []string{"README.md"}},
+			}},
+		},
+	)
+	if len(result) != 1 || result[0].Locale != "ru" || !result[0].AfterSet {
+		t.Fatalf("unexpected locale diff: %+v", result)
+	}
+}
+
+func TestDiffDetectsResolvedLocaleChangeWithoutComponentDigestChange(t *testing.T) {
+	filesA := map[string]string{
+		"ocidoc.yaml": `
+schemaVersion: v1beta
+components:
+  documentation:
+    paths:
+      - /README.md
+      - /docs/en.md
+    locales:
+      en:
+        paths:
+          - /README.md
+  license:
+    paths:
+      - /LICENSE
+`,
+		"README.md":  "# hi",
+		"docs/en.md": "# en",
+		"LICENSE":    "MIT",
+	}
+	filesB := map[string]string{
+		"ocidoc.yaml": `
+schemaVersion: v1beta
+components:
+  documentation:
+    paths:
+      - /README.md
+      - /docs/en.md
+    locales:
+      en:
+        paths:
+          - /docs/en.md
+  license:
+    paths:
+      - /LICENSE
+`,
+		"README.md":  "# hi",
+		"docs/en.md": "# en",
+		"LICENSE":    "MIT",
+	}
+	a := buildDiffLayout(t, filesA, BuildLayoutOptions{})
+	b := buildDiffLayout(t, filesB, BuildLayoutOptions{})
+
+	result, err := Diff(t.Context(), a, b, DiffOptions{MetadataOnly: true})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	if result.Equal || len(result.Locales) != 1 || len(result.Components) != 0 {
+		t.Fatalf("expected locale-only diff, got %+v", result)
+	}
+}
+
+func TestDiffDistinguishesEmptyAndAbsentAnnotation(t *testing.T) {
+	files := diffFixtureFiles()
+	a := buildDiffLayout(t, files, BuildLayoutOptions{Plan: PlanOptions{
+		Annotations: map[string]string{"org.example.empty": ""},
+	}})
+	b := buildDiffLayout(t, files, BuildLayoutOptions{})
+
+	result, err := Diff(t.Context(), a, b, DiffOptions{})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	if result.Equal || len(result.Annotations) != 1 {
+		t.Fatalf("expected one annotation diff, got %+v", result)
+	}
+	annotation := result.Annotations[0]
+	if !annotation.BeforeSet || annotation.AfterSet || annotation.Before != "" || annotation.After != "" {
+		t.Fatalf("expected empty-versus-absent flags, got %+v", annotation)
+	}
+}
+
+func TestDiffDetectsSubjectChange(t *testing.T) {
+	files := diffFixtureFiles()
+	subject := &ocispec.Descriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: digest.FromString("subject"), Size: 1}
+	a := buildDiffLayout(t, files, BuildLayoutOptions{Subject: subject})
+	b := buildDiffLayout(t, files, BuildLayoutOptions{})
+
+	result, err := Diff(t.Context(), a, b, DiffOptions{MetadataOnly: true})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	if result.Equal || result.SubjectBefore == nil || result.SubjectAfter != nil {
+		t.Fatalf("expected subject-only difference, got %+v", result)
 	}
 }
 
@@ -184,9 +298,11 @@ func TestDiffDetectsComponentAddedAndRemoved(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   changelog:
-    - /CHANGELOG.md
+    paths:
+      - /CHANGELOG.md
 `,
 		"README.md":    "# hi",
 		"CHANGELOG.md": "# changelog",
@@ -250,8 +366,9 @@ func TestDiffDetectsEntrypointChangeWithoutFileLevelDiff(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
-    - /docs/guide.md
+    paths:
+      - /README.md
+      - /docs/guide.md
 `,
 		"README.md":     "# hi",
 		"docs/guide.md": "guide",
@@ -260,12 +377,12 @@ components:
 	filesB := map[string]string{
 		"ocidoc.yaml": `
 schemaVersion: v1beta
-entrypoints:
-  documentation: /docs/guide.md
 components:
   documentation:
-    - /README.md
-    - /docs/guide.md
+    entrypoint: /docs/guide.md
+    paths:
+      - /README.md
+      - /docs/guide.md
 `,
 		"README.md":     "# hi",
 		"docs/guide.md": "guide",

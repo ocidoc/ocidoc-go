@@ -2,7 +2,7 @@
   "$defs": {
     "ArtifactConfig": {
       "additionalProperties": false,
-      "description": "ArtifactConfig is the OCIDoc artifact config blob (ConfigMediaType).",
+      "description": "ArtifactConfig is the configuration metadata stored inside an OCIDoc artifact.",
       "properties": {
         "$schema": {
           "const": "https://ocidoc.org/schema/artifact-config-v1beta.json",
@@ -10,18 +10,43 @@
           "examples": [
             "https://ocidoc.org/schema/artifact-config-v1beta.json"
           ],
-          "type": "string"
+          "type": "string",
+          "x-order": "2"
         },
         "components": {
           "additionalProperties": {
             "$ref": "#/$defs/ComponentConfig"
           },
-          "description": "Components maps each component name present in the artifact to its per-component config.\nAt least one component is required, and it must match the manifest's own set of component layers exactly.",
-          "minProperties": 1,
-          "propertyNames": {
-            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
-          },
-          "type": "object"
+          "description": "Components maps each component name present in the artifact to its per-component config.\n\nThe names use the same v1beta set as BuildConfig:\n\n  - `documentation`\n  - `license`\n  - `changelog`\n  - `release-notes`\n  - `security`\n  - `contributing`\n  - `code-of-conduct`\n  - `support`\n\nCustom names are allowed only with the `x-` prefix.\nAt least one component is required, and the set must match the manifest's component layers exactly.",
+          "examples": [
+            {
+              "changelog": {
+                "entrypoint": "CHANGELOG.md"
+              },
+              "documentation": {
+                "entrypoint": "README.md",
+                "locales": {
+                  "en": {
+                    "default": true,
+                    "entrypoint": "README.md",
+                    "files": [
+                      "README.md",
+                      "docs/en/guide.md"
+                    ]
+                  },
+                  "ru": {
+                    "entrypoint": "README.ru.md",
+                    "files": [
+                      "README.ru.md",
+                      "docs/ru/guide.md"
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "type": "object",
+          "x-order": "3"
         },
         "schemaVersion": {
           "default": "v1beta",
@@ -29,7 +54,8 @@
           "enum": [
             "v1beta"
           ],
-          "type": "string"
+          "type": "string",
+          "x-order": "1"
         }
       },
       "required": [
@@ -38,13 +64,50 @@
       ],
       "type": "object"
     },
+    "ArtifactLocaleConfig": {
+      "additionalProperties": false,
+      "description": "ArtifactLocaleConfig describes which bundle documents belong to one locale.",
+      "properties": {
+        "default": {
+          "description": "Default marks the preferred fallback locale for the component.\nExactly one locale is normally marked default when the component has locales;\nconsumers should use the first key in deterministic order only when metadata was produced without an explicit default.",
+          "type": "boolean",
+          "x-order": "1"
+        },
+        "entrypoint": {
+          "description": "Entrypoint is this locale's primary document, as a bundle-relative path.",
+          "type": "string",
+          "x-order": "2"
+        },
+        "files": {
+          "description": "Files lists resolved bundle-relative document paths in this locale.\nThis is an exact bundle membership list, not a glob or source rule.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-order": "3"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "type": "object"
+    },
     "ComponentConfig": {
       "additionalProperties": false,
       "description": "ComponentConfig is the per-component entry in ArtifactConfig.",
       "properties": {
         "entrypoint": {
-          "description": "Entrypoint is this component's primary file, as a bundle-relative path (no leading \"/\", no \"..\" segments).\nOmit it when the component has no designated primary file.",
-          "type": "string"
+          "description": "Entrypoint is this component's primary file, as a bundle-relative path (no leading `/`, no `..` segments).\nOmit it when the component has no designated primary file.\nIt is a bundle path, not a source-tree matching rule.",
+          "type": "string",
+          "x-order": "1"
+        },
+        "locales": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtifactLocaleConfig"
+          },
+          "description": "Locales maps locale keys to resolved files and entrypoints for this component.\nIt is produced from BuildConfig locale rules and records the exact files included in each locale.\nA component may have no locales, and locale keys remain component-local.",
+          "type": "object",
+          "x-order": "2"
         }
       },
       "type": "object"

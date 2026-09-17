@@ -28,9 +28,11 @@ func newLayoutFixture(t *testing.T) string {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   license:
-    - /LICENSE
+    paths:
+      - /LICENSE
 `,
 		"README.md": "# hi",
 		"LICENSE":   "MIT",

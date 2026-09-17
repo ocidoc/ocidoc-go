@@ -122,6 +122,12 @@ func detectEntrypoint(component spec.ComponentType, files []string) (string, boo
 	return "", false
 }
 
+// DetectEntrypoint applies the component's deterministic entrypoint candidates
+// to an already-resolved list of bundle-relative files.
+func DetectEntrypoint(component spec.ComponentType, files []string) (string, bool) {
+	return detectEntrypoint(component, files)
+}
+
 // matchesEntrypointCandidate reports whether path satisfies candidate,
 // where a candidate ending in ".*" matches any path sharing its prefix plus a "."
 // and at least one more character (an extension).

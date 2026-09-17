@@ -22,6 +22,11 @@ func TestBuildArtifactConfig(t *testing.T) {
 		Entrypoints: map[spec.ComponentType]string{
 			spec.ComponentDocumentation: "README.md",
 		},
+		Locales: map[spec.ComponentType]map[string]LocalePlan{
+			spec.ComponentDocumentation: {
+				"en": {Default: true, Entrypoint: "README.md", Paths: []string{"README.md"}},
+			},
+		},
 	}
 
 	cfg := buildArtifactConfig(plan)
@@ -31,8 +36,13 @@ func TestBuildArtifactConfig(t *testing.T) {
 	}
 
 	want := map[spec.ComponentType]spec.ComponentConfig{
-		spec.ComponentDocumentation: {Entrypoint: "README.md"},
-		spec.ComponentLicense:       {Entrypoint: ""},
+		spec.ComponentDocumentation: {
+			Entrypoint: "README.md",
+			Locales: map[string]spec.ArtifactLocaleConfig{
+				"en": {Default: true, Entrypoint: "README.md", Files: []string{"README.md"}},
+			},
+		},
+		spec.ComponentLicense: {Entrypoint: ""},
 	}
 	if !reflect.DeepEqual(cfg.Components, want) {
 		t.Fatalf("got %+v, want %+v", cfg.Components, want)
@@ -40,6 +50,23 @@ func TestBuildArtifactConfig(t *testing.T) {
 
 	if err := spec.ValidateArtifactConfig(cfg); err != nil {
 		t.Fatalf("ValidateArtifactConfig: %v", err)
+	}
+}
+
+func TestBuildArtifactConfigCarriesResolvedLocales(t *testing.T) {
+	plan := &BuildPlan{
+		Ownership: map[spec.ComponentType][]string{spec.ComponentDocumentation: {"README.md"}},
+		Locales: map[spec.ComponentType]map[string]LocalePlan{
+			spec.ComponentDocumentation: {"en": {Default: true, Entrypoint: "README.md", Paths: []string{"README.md"}}},
+		},
+	}
+	cfg := buildArtifactConfig(plan)
+	if got := cfg.Components[spec.ComponentDocumentation].Locales["en"].Files; !reflect.DeepEqual(got, []string{"README.md"}) {
+		t.Fatalf("got locales %v, want [README.md]", got)
+	}
+	plan.Locales[spec.ComponentDocumentation]["en"].Paths[0] = "changed.md"
+	if cfg.Components[spec.ComponentDocumentation].Locales["en"].Files[0] != "README.md" {
+		t.Fatal("artifact config must not alias plan locale paths")
 	}
 }
 

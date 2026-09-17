@@ -6,11 +6,11 @@ package archive
 
 import (
 	"archive/tar"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -60,15 +60,15 @@ func DefaultExtractOptions() ExtractOptions {
 // For each entry:
 //
 //  1. reject anything but a regular file;
-//  2. reject an unsafe name
+//  1. reject an unsafe name
 //     (empty, NUL, backslash-separated, absolute, or containing a ".." segment);
-//  3. join under destDir and verify the joined path is still under it
+//  1. join under destDir and verify the joined path is still under it
 //     (defense in depth beyond step 2's syntax check);
-//  4. reject symlinked destination and parent path components;
-//  5. enforce MaxFiles/MaxTotalSize/MaxFileSize before writing;
-//  6. create the file without overwrite unless Overwrite is set;
-//  7. write exactly the entry's declared size, then close before continuing to the next entry;
-//  8. delete the partial file if writing that entry fails.
+//  1. reject symlinked destination and parent path components;
+//  1. enforce MaxFiles/MaxTotalSize/MaxFileSize before writing;
+//  1. create the file without overwrite unless Overwrite is set;
+//  1. write exactly the entry's declared size, then close before continuing to the next entry;
+//  1. delete the partial file if writing that entry fails.
 //
 // destDir is created if it does not already exist.
 // Existing symlinks in destDir or its parent chain are rejected both
@@ -78,6 +78,16 @@ func DefaultExtractOptions() ExtractOptions {
 // by an untrusted process because portable path APIs cannot make the full check
 // and file creation sequence atomic.
 func Extract(r io.Reader, destDir string, opts ExtractOptions) (Info, error) {
+	return ExtractContext(context.Background(), r, destDir, opts)
+}
+
+// ExtractContext is Extract with cancellation checkpoints during traversal and file writes.
+func ExtractContext(
+	ctx context.Context,
+	r io.Reader,
+	destDir string,
+	opts ExtractOptions,
+) (Info, error) {
 	opts = applyExtractDefaults(opts)
 
 	destAbs, err := filepath.Abs(destDir)
@@ -103,8 +113,18 @@ func Extract(r io.Reader, destDir string, opts ExtractOptions) (Info, error) {
 	var totalSize int64
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return Info{}, err
+		}
+
 		header, err := tr.Next()
 		if errors.Is(err, io.EOF) {
+			tail, err := drain(ctx, r, opts.MaxTotalSize, totalSize)
+			if err != nil {
+				return Info{}, fmt.Errorf("read decompressed tar tail: %w", err)
+			}
+
+			totalSize += tail
 			break
 		}
 
@@ -142,7 +162,7 @@ func Extract(r io.Reader, destDir string, opts ExtractOptions) (Info, error) {
 			return Info{}, fmt.Errorf("%w: entry %q escapes destination", spec.ErrInvalid, header.Name)
 		}
 
-		if err := extractFile(tr, target, header.Size, opts.Overwrite); err != nil {
+		if err := extractFile(ctx, tr, target, header.Size, opts.Overwrite); err != nil {
 			return Info{}, fmt.Errorf("extract %q: %w", header.Name, err)
 		}
 	}
@@ -170,22 +190,8 @@ func applyExtractDefaults(opts ExtractOptions) ExtractOptions {
 // sanitizeExtractPath rejects an unsafe tar entry name
 // and otherwise returns it unchanged for joining under a destination root.
 func sanitizeExtractPath(name string) (string, error) {
-	if name == "" || strings.ContainsRune(name, 0) {
-		return "", fmt.Errorf("%w: invalid entry name %q", spec.ErrInvalid, name)
-	}
-
-	if strings.Contains(name, "\\") {
-		return "", fmt.Errorf("%w: entry %q uses backslash separators", spec.ErrInvalid, name)
-	}
-
-	if path.IsAbs(name) {
-		return "", fmt.Errorf("%w: entry %q is an absolute path", spec.ErrInvalid, name)
-	}
-
-	for seg := range strings.SplitSeq(name, "/") {
-		if seg == ".." {
-			return "", fmt.Errorf("%w: entry %q contains a \"..\" segment", spec.ErrInvalid, name)
-		}
+	if err := spec.ValidateBundlePath(name); err != nil {
+		return "", fmt.Errorf("entry %q: %w", name, err)
 	}
 
 	return name, nil
@@ -206,7 +212,7 @@ func isWithinRoot(root, target string) bool {
 // extractFile writes exactly size bytes read from r to target,
 // creating target (and its parent directories) fresh unless overwrite is set,
 // and removing a partially written file on any error.
-func extractFile(r io.Reader, target string, size int64, overwrite bool) error {
+func extractFile(ctx context.Context, r io.Reader, target string, size int64, overwrite bool) error {
 	parent := filepath.Dir(target)
 	if err := ensureDirectoryPath(parent); err != nil {
 		return fmt.Errorf("validate parent directory: %w", err)
@@ -232,7 +238,7 @@ func extractFile(r io.Reader, target string, size int64, overwrite bool) error {
 		return fmt.Errorf("create file: %w", err)
 	}
 
-	written, copyErr := io.CopyN(f, r, size)
+	written, copyErr := io.CopyN(f, contextReader{ctx: ctx, reader: r}, size)
 	closeErr := f.Close()
 
 	if copyErr != nil {
@@ -257,6 +263,7 @@ func ensureDirectoryPath(target string) error {
 		if os.IsNotExist(err) {
 			continue
 		}
+
 		if err != nil {
 			return fmt.Errorf("inspect %q: %w", current, err)
 		}

@@ -41,9 +41,9 @@ func TestPlanResolvesOwnership(t *testing.T) {
 
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/README.md", "/docs/**"},
-			spec.ComponentLicense:       {"/LICENSE"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/README.md", "/docs/**"}},
+			spec.ComponentLicense:       {Paths: []string{"/LICENSE"}},
 		},
 	}
 
@@ -82,8 +82,8 @@ func TestPlanAppliesGlobalIgnore(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
 		Ignore:        []string{"/docs/internal/**", "!/docs/internal/pub.md"},
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/docs/**"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/docs/**"}},
 		},
 	}
 
@@ -114,9 +114,9 @@ func TestPlanRejectsOwnershipOverlap(t *testing.T) {
 
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/docs/**"},
-			"x-runbooks":                {"/docs/**"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/docs/**"}},
+			"x-runbooks":                {Paths: []string{"/docs/**"}},
 		},
 	}
 
@@ -155,8 +155,8 @@ func TestPlanDereferencesSymlinkAsLogicalBundlePath(t *testing.T) {
 
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/docs/**"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/docs/**"}},
 		},
 	}
 
@@ -192,8 +192,8 @@ func TestPlanRejectsSymlinkEscape(t *testing.T) {
 
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/*.md"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/*.md"}},
 		},
 	}
 	matchers, err := Compile(cfg)
@@ -216,8 +216,8 @@ func TestPlanBuildConfigIgnoreWinsOverComponentMatch(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
 		Ignore:        []string{"/docs/secret.md"},
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/docs/secret.md"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/docs/secret.md"}},
 		},
 	}
 
@@ -241,8 +241,8 @@ func TestPlanEmptyTreeYieldsNoOwnership(t *testing.T) {
 
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/README.md"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/README.md"}},
 		},
 	}
 

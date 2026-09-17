@@ -180,6 +180,7 @@ func (c *Client) pushComponents(
 	return nil
 }
 
+// pushComponent pushes one component blob to the registry.
 func (c *Client) pushComponent(
 	ctx context.Context,
 	source artifact.Reader,

@@ -24,9 +24,11 @@ func TestAssembleEndToEnd(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   license:
-    - /LICENSE
+    paths:
+      - /LICENSE
 `,
 		"README.md": "# hi",
 		"LICENSE":   "MIT",

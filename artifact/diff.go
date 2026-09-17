@@ -7,26 +7,67 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"maps"
+	"reflect"
 	"slices"
 	"sort"
 
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/internal/archive"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
-// AnnotationDiff is one root manifest annotation key that differs between the two compared artifacts.
-// Before or After is empty when the key is absent on that side.
+// AnnotationDiff describes one changed root manifest annotation.
 type AnnotationDiff struct {
 	// Key is the manifest annotation name.
-	Key string
+	Key string `json:"key" yaml:"key"`
 
 	// Before is the first artifact's value, or empty when absent.
-	Before string
+	Before string `json:"before" yaml:"before"`
 
 	// After is the second artifact's value, or empty when absent.
-	After string
+	After string `json:"after" yaml:"after"`
+
+	// BeforeSet reports whether the annotation exists in the first artifact.
+	BeforeSet bool `json:"beforeSet" yaml:"beforeSet"`
+
+	// AfterSet reports whether the annotation exists in the second artifact.
+	AfterSet bool `json:"afterSet" yaml:"afterSet"`
+}
+
+// LocaleDiff describes one changed locale membership set.
+type LocaleDiff struct {
+	// Component is the component whose locale membership changed.
+	Component spec.ComponentType `json:"component" yaml:"component"`
+
+	// Locale is the opaque locale key.
+	Locale string `json:"locale" yaml:"locale"`
+
+	// EntrypointBefore is the resolved locale entrypoint in the first artifact.
+	EntrypointBefore string `json:"entrypointBefore,omitempty" yaml:"entrypointBefore,omitempty"`
+
+	// EntrypointAfter is the resolved locale entrypoint in the second artifact.
+	EntrypointAfter string `json:"entrypointAfter,omitempty" yaml:"entrypointAfter,omitempty"`
+
+	// Before contains sorted bundle-relative document paths in the first artifact.
+	Before []string `json:"before,omitempty" yaml:"before,omitempty"`
+
+	// After contains sorted bundle-relative document paths in the second artifact.
+	After []string `json:"after,omitempty" yaml:"after,omitempty"`
+
+	// BeforeSet reports whether the locale exists in the first artifact.
+	BeforeSet bool `json:"beforeSet" yaml:"beforeSet"`
+
+	// AfterSet reports whether the locale exists in the second artifact.
+	AfterSet bool `json:"afterSet" yaml:"afterSet"`
+
+	// DefaultBefore reports whether this locale is the component fallback in the first artifact.
+	DefaultBefore bool `json:"defaultBefore" yaml:"defaultBefore"`
+
+	// DefaultAfter reports whether this locale is the component fallback in the second artifact.
+	DefaultAfter bool `json:"defaultAfter" yaml:"defaultAfter"`
 }
 
 // ComponentPresence classifies whether a compared component exists on both sides.
@@ -62,51 +103,51 @@ const (
 // SizeBefore or SizeAfter is zero when the path does not exist on that side.
 type FileDiff struct {
 	// Path is the bundle-relative file path.
-	Path string
+	Path string `json:"path" yaml:"path"`
 
 	// Change classifies the file's presence or content change.
-	Change FileChange
+	Change FileChange `json:"change" yaml:"change"`
 
 	// SizeBefore is the first artifact's tar-header size.
-	SizeBefore int64
+	SizeBefore int64 `json:"sizeBefore" yaml:"sizeBefore"`
 
 	// SizeAfter is the second artifact's tar-header size.
-	SizeAfter int64
+	SizeAfter int64 `json:"sizeAfter" yaml:"sizeAfter"`
 }
 
 // ComponentDiff is one component type that differs between the two compared artifacts.
 type ComponentDiff struct {
 	// Component is the semantic component type.
-	Component spec.ComponentType
+	Component spec.ComponentType `json:"component" yaml:"component"`
 
 	// DigestBefore is the first artifact's component digest.
-	DigestBefore digest.Digest
+	DigestBefore digest.Digest `json:"digestBefore" yaml:"digestBefore"`
 
 	// DigestAfter is the second artifact's component digest.
-	DigestAfter digest.Digest
+	DigestAfter digest.Digest `json:"digestAfter" yaml:"digestAfter"`
 
 	// EntrypointBefore is the first artifact's configured entrypoint.
-	EntrypointBefore string
+	EntrypointBefore string `json:"entrypointBefore" yaml:"entrypointBefore"`
 
 	// EntrypointAfter is the second artifact's configured entrypoint.
-	EntrypointAfter string
+	EntrypointAfter string `json:"entrypointAfter" yaml:"entrypointAfter"`
 
-	// Files is the component's file-level diff: populated when the/ component was added,
-	// removed or DigestChanged, unless opts.MetadataOnly is set; nil otherwise.
-	// A component that changed only by EntrypointChanged never gets a file-level diff -
-	// an entrypoint is an artifact config fact, independent of the component's actual content.
-	Files []FileDiff
+	// Files is the component's file-level diff.
+	// It is populated when the component was added, removed or DigestChanged, unless opts.MetadataOnly is set.
+	// A component that changed only by EntrypointChanged has no file-level diff
+	// because an entrypoint is an artifact config fact independent of its content.
+	Files []FileDiff `json:"files,omitempty" yaml:"files,omitempty"`
 
 	// Presence reports whether the component exists in both artifacts or on one side only.
-	Presence ComponentPresence
+	Presence ComponentPresence `json:"presence" yaml:"presence"`
 
 	// DigestChanged is true when the component exists on both sides with a different descriptor digest.
 	// DigestBefore/DigestAfter are the zero digest.Digest on the side where the component is absent.
-	DigestChanged bool
+	DigestChanged bool `json:"digestChanged" yaml:"digestChanged"`
 
 	// EntrypointChanged is true when the component's configured entrypoint
 	// differs between the two artifact configs.
-	EntrypointChanged bool
+	EntrypointChanged bool `json:"entrypointChanged" yaml:"entrypointChanged"`
 }
 
 // DiffOptions controls Diff's depth and scope.
@@ -126,20 +167,31 @@ type DiffResult struct {
 
 	// SchemaVersionBefore is the first artifact configuration's schema version.
 	// It is empty when both artifact configurations use the same version.
-	SchemaVersionBefore string
+	SchemaVersionBefore string `json:"schemaVersionBefore,omitempty" yaml:"schemaVersionBefore,omitempty"`
 
 	// SchemaVersionAfter is the second artifact configuration's schema version.
 	// It is empty when both artifact configurations use the same version.
-	SchemaVersionAfter string
+	SchemaVersionAfter string `json:"schemaVersionAfter,omitempty" yaml:"schemaVersionAfter,omitempty"`
+
+	// SubjectBefore is the root manifest subject in the first artifact.
+	// A nil value means that the manifest did not contain a subject.
+	SubjectBefore *ocispec.Descriptor `json:"subjectBefore,omitempty" yaml:"subjectBefore,omitempty"`
+
+	// SubjectAfter is the root manifest subject in the second artifact.
+	// A nil value means that the manifest did not contain a subject.
+	SubjectAfter *ocispec.Descriptor `json:"subjectAfter,omitempty" yaml:"subjectAfter,omitempty"`
 
 	// Annotations lists changed root manifest annotations.
-	Annotations []AnnotationDiff
+	Annotations []AnnotationDiff `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 
 	// Components lists components with a detected difference.
-	Components []ComponentDiff
+	Components []ComponentDiff `json:"components,omitempty" yaml:"components,omitempty"`
+
+	// Locales lists changed resolved locale membership sets.
+	Locales []LocaleDiff `json:"locales,omitempty" yaml:"locales,omitempty"`
 
 	// Equal reports whether no compared metadata or component differs.
-	Equal bool
+	Equal bool `json:"equal" yaml:"equal"`
 }
 
 // Diff compares two already-open artifacts: root manifest annotations,
@@ -192,11 +244,16 @@ func Diff(ctx context.Context, a, b Reader, opts DiffOptions) (*DiffResult, erro
 	result := &DiffResult{
 		Annotations: diffAnnotations(manifestA.Annotations, manifestB.Annotations),
 	}
+	if !reflect.DeepEqual(manifestA.Subject, manifestB.Subject) {
+		result.SubjectBefore = cloneDescriptor(manifestA.Subject)
+		result.SubjectAfter = cloneDescriptor(manifestB.Subject)
+	}
 
 	if cfgA.SchemaVersion != cfgB.SchemaVersion {
 		result.SchemaVersionBefore = cfgA.SchemaVersion
 		result.SchemaVersionAfter = cfgB.SchemaVersion
 	}
+	result.Locales = diffLocales(cfgA.Components, cfgB.Components)
 
 	components, err := diffComponents(ctx, a, b, cfgA, cfgB, componentsA, componentsB, opts)
 	if err != nil {
@@ -205,9 +262,64 @@ func Diff(ctx context.Context, a, b Reader, opts DiffOptions) (*DiffResult, erro
 
 	result.Components = components
 
-	result.Equal = len(result.Annotations) == 0 && result.SchemaVersionBefore == "" && len(result.Components) == 0
+	result.Equal = len(result.Annotations) == 0 && result.SchemaVersionBefore == "" &&
+		reflect.DeepEqual(manifestA.Subject, manifestB.Subject) && len(result.Components) == 0 &&
+		len(result.Locales) == 0
 
 	return result, nil
+}
+
+// diffLocales compares locale metadata for all components.
+func diffLocales(before, after map[spec.ComponentType]spec.ComponentConfig) []LocaleDiff {
+	var diffs []LocaleDiff
+	for _, component := range unionComponentConfigTypes(before, after) {
+		beforeLocales, beforeComponent := before[component]
+		afterLocales, afterComponent := after[component]
+
+		if !beforeComponent {
+			beforeLocales = spec.ComponentConfig{}
+		}
+		if !afterComponent {
+			afterLocales = spec.ComponentConfig{}
+		}
+
+		for _, locale := range unionKeys(beforeLocales.Locales, afterLocales.Locales) {
+			beforeConfig, beforeSet := beforeLocales.Locales[locale]
+			afterConfig, afterSet := afterLocales.Locales[locale]
+			if beforeSet && afterSet && reflect.DeepEqual(beforeConfig, afterConfig) {
+				continue
+			}
+
+			diffs = append(diffs, LocaleDiff{
+				Component: component, Locale: locale,
+				Before: append([]string(nil), beforeConfig.Files...), After: append([]string(nil), afterConfig.Files...),
+				BeforeSet: beforeSet, AfterSet: afterSet,
+				EntrypointBefore: beforeConfig.Entrypoint, EntrypointAfter: afterConfig.Entrypoint,
+				DefaultBefore: beforeConfig.Default, DefaultAfter: afterConfig.Default,
+			})
+		}
+	}
+
+	return diffs
+}
+
+// unionComponentConfigTypes returns all component names from both configs.
+func unionComponentConfigTypes(a, b map[spec.ComponentType]spec.ComponentConfig) []spec.ComponentType {
+	seen := make(map[spec.ComponentType]struct{}, len(a)+len(b))
+	for component := range a {
+		seen[component] = struct{}{}
+	}
+	for component := range b {
+		seen[component] = struct{}{}
+	}
+
+	result := make([]spec.ComponentType, 0, len(seen))
+	for component := range seen {
+		result = append(result, component)
+	}
+
+	slices.Sort(result)
+	return result
 }
 
 // diffAnnotations returns one AnnotationDiff per key present in before
@@ -219,14 +331,39 @@ func diffAnnotations(before, after map[string]string) []AnnotationDiff {
 
 	for _, k := range keys {
 		v1, v2 := before[k], after[k]
-		if v1 == v2 {
+		_, beforeSet := before[k]
+		_, afterSet := after[k]
+		if v1 == v2 && beforeSet == afterSet {
 			continue
 		}
 
-		diffs = append(diffs, AnnotationDiff{Key: k, Before: v1, After: v2})
+		diffs = append(diffs, AnnotationDiff{
+			Key: k, Before: v1, After: v2, BeforeSet: beforeSet, AfterSet: afterSet,
+		})
 	}
 
 	return diffs
+}
+
+// cloneDescriptor returns a deep copy of an OCI descriptor.
+func cloneDescriptor(value *ocispec.Descriptor) *ocispec.Descriptor {
+	if value == nil {
+		return nil
+	}
+
+	clone := *value
+	if value.URLs != nil {
+		clone.URLs = append([]string(nil), value.URLs...)
+	}
+	if value.Annotations != nil {
+		clone.Annotations = make(map[string]string, len(value.Annotations))
+		maps.Copy(clone.Annotations, value.Annotations)
+	}
+	if value.Data != nil {
+		clone.Data = append([]byte(nil), value.Data...)
+	}
+
+	return &clone
 }
 
 // unionKeys returns the sorted union of a's and b's keys.
@@ -275,9 +412,11 @@ func diffComponents(
 		case inA && !inB:
 			cd.Presence = ComponentRemoved
 			cd.DigestBefore = descA.Descriptor.Digest
+
 		case !inA && inB:
 			cd.Presence = ComponentAdded
 			cd.DigestAfter = descB.Descriptor.Digest
+
 		default:
 			cd.Presence = ComponentPresent
 			cd.DigestBefore = descA.Descriptor.Digest
@@ -374,8 +513,10 @@ func diffComponentFiles(
 		switch {
 		case existsA && !existsB:
 			diffs = append(diffs, FileDiff{Path: p, Change: FileRemoved, SizeBefore: fileA.Size})
+
 		case !existsA && existsB:
 			diffs = append(diffs, FileDiff{Path: p, Change: FileAdded, SizeAfter: fileB.Size})
+
 		case fileA.Size != fileB.Size || fileA.Digest != fileB.Digest:
 			diffs = append(diffs, FileDiff{Path: p, Change: FileModified, SizeBefore: fileA.Size, SizeAfter: fileB.Size})
 		}

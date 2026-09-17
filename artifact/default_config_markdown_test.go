@@ -110,8 +110,8 @@ func TestDefaultConfigDirectoryPatternsRemainFormatAgnostic(t *testing.T) {
 func TestExplicitPatternsStillPackageArbitraryFormats(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/README.rst", "/manual.pdf", "/guide.docx", "/includes/**"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/README.rst", "/manual.pdf", "/guide.docx", "/includes/**"}},
 		},
 	}
 

@@ -217,8 +217,8 @@ func TestDiscoverDependenciesAppliesGlobalIgnore(t *testing.T) {
 	})
 	matchers, err := Compile(&spec.BuildConfig{
 		Ignore: []string{"/docs/internal.md"},
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/README.md"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/README.md"}},
 		},
 	})
 	if err != nil {

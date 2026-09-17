@@ -43,7 +43,11 @@ func Scan(ctx context.Context, r io.Reader, opts ExtractOptions) ([]ScanEntry, I
 
 		header, err := tr.Next()
 		if errors.Is(err, io.EOF) {
-			return entries, Info{FileCount: len(entries), UncompressedSize: totalSize}, nil
+			tail, err := drain(ctx, r, opts.MaxTotalSize, totalSize)
+			if err != nil {
+				return nil, Info{}, fmt.Errorf("read decompressed tar tail: %w", err)
+			}
+			return entries, Info{FileCount: len(entries), UncompressedSize: totalSize + tail}, nil
 		}
 		if err != nil {
 			return nil, Info{}, fmt.Errorf("read tar header: %w", err)
@@ -79,7 +83,7 @@ func Scan(ctx context.Context, r io.Reader, opts ExtractOptions) ([]ScanEntry, I
 			content = limited
 		}
 
-		read, err := io.Copy(io.Discard, content)
+		read, err := io.Copy(io.Discard, contextReader{ctx: ctx, reader: content})
 		if err != nil {
 			return nil, Info{}, fmt.Errorf("read entry %q: %w", header.Name, err)
 		}

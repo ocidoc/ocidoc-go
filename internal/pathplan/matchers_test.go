@@ -5,6 +5,7 @@
 package pathplan
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ocidoc/ocidoc-go/spec"
@@ -14,7 +15,7 @@ func TestCompileIgnorePolarity(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
 		Ignore:        []string{"/docs/internal/**", "!/docs/internal/public.md"},
-		Components:    map[spec.ComponentType][]string{spec.ComponentDocumentation: {"/docs/**"}},
+		Components:    map[spec.ComponentType]spec.ComponentBuildConfig{spec.ComponentDocumentation: {Paths: []string{"/docs/**"}}},
 	}
 
 	matchers, err := Compile(cfg)
@@ -38,8 +39,8 @@ func TestCompileIgnorePolarity(t *testing.T) {
 func TestCompileComponentPolarity(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentDocumentation: {"/docs/**", "!/docs/internal/**"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentDocumentation: {Paths: []string{"/docs/**", "!/docs/internal/**"}},
 		},
 	}
 
@@ -66,8 +67,8 @@ func TestCompileComponentPolarity(t *testing.T) {
 func TestCompileComponentBraceExpansion(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components: map[spec.ComponentType][]string{
-			spec.ComponentLicense: {"/{LICENSE,LICENCE}{,.md,.txt}"},
+		Components: map[spec.ComponentType]spec.ComponentBuildConfig{
+			spec.ComponentLicense: {Paths: []string{"/{LICENSE,LICENCE}{,.md,.txt}"}},
 		},
 	}
 
@@ -92,7 +93,7 @@ func TestCompileComponentBraceExpansion(t *testing.T) {
 func TestCompileNilIgnoreWhenUnset(t *testing.T) {
 	cfg := &spec.BuildConfig{
 		SchemaVersion: spec.SchemaVersion,
-		Components:    map[spec.ComponentType][]string{spec.ComponentLicense: {"/LICENSE"}},
+		Components:    map[spec.ComponentType]spec.ComponentBuildConfig{spec.ComponentLicense: {Paths: []string{"/LICENSE"}}},
 	}
 
 	matchers, err := Compile(cfg)
@@ -102,5 +103,27 @@ func TestCompileNilIgnoreWhenUnset(t *testing.T) {
 
 	if matchers.Ignore != nil {
 		t.Fatal("expected nil Ignore matcher when the build config declares no ignore rules")
+	}
+}
+
+func TestClassifyLocalesUsesResolvedDocumentsOnly(t *testing.T) {
+	ownership := Ownership{
+		spec.ComponentDocumentation: {"README.md", "docs/guide.md", "docs/logo.svg", "docs/README"},
+		spec.ComponentLicense:       {"LICENSE"},
+	}
+	locales, err := ClassifyLocales(map[spec.ComponentType]spec.ComponentBuildConfig{
+		spec.ComponentDocumentation: {Locales: map[string]spec.BuildLocaleConfig{
+			"ru": {Paths: []string{"/docs/**", "!/docs/README"}},
+			"en": {Paths: []string{"/**"}},
+		}},
+	}, ownership)
+	if err != nil {
+		t.Fatalf("ClassifyLocales: %v", err)
+	}
+	if got, want := locales[spec.ComponentDocumentation]["ru"], []string{"docs/guide.md"}; !slices.Equal(got, want) {
+		t.Fatalf("ru = %v, want %v", got, want)
+	}
+	if got, want := locales[spec.ComponentDocumentation]["en"], []string{"README.md", "docs/README", "docs/guide.md"}; !slices.Equal(got, want) {
+		t.Fatalf("en = %v, want %v", got, want)
 	}
 }

@@ -16,6 +16,7 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
+	"github.com/ocidoc/ocidoc-go/internal/archive"
 	"github.com/ocidoc/ocidoc-go/internal/compression"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
@@ -114,7 +115,9 @@ func Verify(ctx context.Context, r Reader, opts VerifyOptions) (*Verification, e
 		return result, nil
 	}
 
-	verifyComponentsDeep(ctx, r, result, cfg, components, opts.Component)
+	if err := verifyComponentsDeep(ctx, r, result, cfg, components, opts.Component); err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }
@@ -255,19 +258,28 @@ func verifyComponentsDeep(
 	cfg *spec.ArtifactConfig,
 	components []ComponentDescriptor,
 	only spec.ComponentType,
-) {
+) error {
 	byComponent := make(map[spec.ComponentType][]string, len(components))
 
 	var allPaths []string
+	found := only == ""
 
 	for _, c := range components {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if only != "" && c.Type != only {
 			continue
 		}
+		found = true
 
 		paths := verifyComponentDeep(ctx, r, result, c)
 		byComponent[c.Type] = paths
 		allPaths = append(allPaths, paths...)
+	}
+	if !found {
+		result.fail(only, "component %q is not present in the artifact", only)
+		return nil
 	}
 
 	for name, cc := range cfg.Components {
@@ -282,6 +294,52 @@ func verifyComponentsDeep(
 
 	if err := spec.ValidateBundlePaths(allPaths); err != nil {
 		result.fail("", "global path tree: %v", err)
+	}
+	verifyLocalePaths(result, cfg.Components, byComponent, only)
+	return ctx.Err()
+}
+
+// verifyLocalePaths checks resolved locale memberships
+// against the files that were opened during deep verification.
+// With a component selector, paths in other components
+// remain unchecked because their blobs were not opened.
+func verifyLocalePaths(
+	result *Verification,
+	components map[spec.ComponentType]spec.ComponentConfig,
+	byComponent map[spec.ComponentType][]string,
+	only spec.ComponentType,
+) {
+	for component, config := range components {
+		if only != "" && component != only {
+			continue
+		}
+
+		owned := make(map[string]struct{}, len(byComponent[component]))
+		for _, path := range byComponent[component] {
+			owned[path] = struct{}{}
+		}
+
+		for locale, localeConfig := range config.Locales {
+			if localeConfig.Entrypoint != "" && !slices.Contains(localeConfig.Files, localeConfig.Entrypoint) {
+				result.fail(
+					component,
+					"locale %q entrypoint %q is not among locale files",
+					locale,
+					localeConfig.Entrypoint,
+				)
+			}
+
+			for _, path := range localeConfig.Files {
+				if _, ok := owned[path]; !ok {
+					result.fail(component, "locale %q path %q is not present in component files", locale, path)
+					continue
+				}
+
+				if !spec.IsDocumentPath(path) {
+					result.fail(component, "locale %q path %q is not a document", locale, path)
+				}
+			}
+		}
 	}
 }
 
@@ -306,15 +364,16 @@ func verifyComponentDeep(ctx context.Context, r Reader, result *Verification, c 
 	if err != nil {
 		result.fail(c.Type, "decompress: %v", err)
 	} else {
-		paths = verifyComponentTarSafety(result, c.Type, decompressed)
-
-		if err := decompressed.Close(); err != nil {
-			result.fail(c.Type, "close decompressor: %v", err)
+		var complete bool
+		paths, complete = verifyComponentTarSafety(ctx, result, c.Type, decompressed)
+		if complete {
+			if err := finishComponentStream(ctx, decompressed, rc); err != nil {
+				result.fail(c.Type, "component stream verification failed: %v", err)
+			}
+		} else {
+			_ = decompressed.Close()
+			_ = rc.Close()
 		}
-	}
-
-	if _, err := io.Copy(io.Discard, rc); err != nil {
-		result.fail(c.Type, "digest verification failed: %v", err)
 	}
 
 	return paths
@@ -323,21 +382,55 @@ func verifyComponentDeep(ctx context.Context, r Reader, result *Verification, c 
 // verifyComponentTarSafety reads every tar entry from decompressed,
 // reporting an issue for any entry that is not a regular file
 // at a well-formed bundle path, and returns the regular-file paths.
-func verifyComponentTarSafety(result *Verification, componentType spec.ComponentType, decompressed io.Reader) []string {
+func verifyComponentTarSafety(
+	ctx context.Context,
+	result *Verification,
+	componentType spec.ComponentType,
+	decompressed io.Reader,
+) ([]string, bool) {
 	tr := tar.NewReader(decompressed)
+	limits := archive.DefaultExtractOptions()
 
 	var paths []string
+	var totalSize int64
+	var entryCount int
 
 	for {
+		if err := ctx.Err(); err != nil {
+			result.fail(componentType, "verify canceled: %v", err)
+			return paths, false
+		}
+
 		header, err := tr.Next()
 		if errors.Is(err, io.EOF) {
-			break
+			return paths, true
 		}
 
 		if err != nil {
 			result.fail(componentType, "read tar header: %v", err)
-			break
+			return paths, false
 		}
+
+		entryCount++
+		if entryCount > limits.MaxFiles {
+			result.fail(componentType, "entry count exceeds max %d", limits.MaxFiles)
+			return paths, false
+		}
+		if header.Size < 0 || header.Size > limits.MaxFileSize || totalSize > limits.MaxTotalSize-header.Size {
+			result.fail(componentType, "entry %q exceeds verification limits", header.Name)
+			return paths, false
+		}
+
+		read, readErr := io.Copy(io.Discard, io.LimitReader(contextReader{ctx: ctx, reader: tr}, header.Size))
+		if readErr != nil {
+			result.fail(componentType, "read entry %q: %v", header.Name, readErr)
+			return paths, false
+		}
+		if read != header.Size {
+			result.fail(componentType, "entry %q contains %d bytes, want %d", header.Name, read, header.Size)
+			return paths, false
+		}
+		totalSize += header.Size
 
 		if header.Typeflag != tar.TypeReg {
 			result.fail(componentType, "entry %q is not a regular file", header.Name)
@@ -351,6 +444,4 @@ func verifyComponentTarSafety(result *Verification, componentType spec.Component
 
 		paths = append(paths, header.Name)
 	}
-
-	return paths
 }

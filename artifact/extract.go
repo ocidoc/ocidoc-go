@@ -110,17 +110,20 @@ func extractComponent(ctx context.Context, r Reader, c ComponentDescriptor, dest
 	if err != nil {
 		return err
 	}
-	//nolint:errcheck // read-only handle; a close error here would not change an already-successful extraction.
-	defer rc.Close()
 
 	decompressed, err := compression.NewReader(rc, c.Descriptor.MediaType)
 	if err != nil {
+		_ = rc.Close()
 		return err
 	}
-	//nolint:errcheck // read-only handle; a close error here would not change an already-successful extraction.
-	defer decompressed.Close()
 
-	if _, err := archive.Extract(decompressed, destDir, opts); err != nil {
+	if _, err := archive.ExtractContext(ctx, decompressed, destDir, opts); err != nil {
+		_ = decompressed.Close()
+		_ = rc.Close()
+		return err
+	}
+
+	if err := finishComponentStream(ctx, decompressed, rc); err != nil {
 		return err
 	}
 

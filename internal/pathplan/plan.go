@@ -5,6 +5,7 @@
 package pathplan
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"sort"
@@ -51,6 +52,14 @@ func (e *OwnershipConflictError) Unwrap() error {
 // The returned ownership is validated with spec.ValidateBundlePaths before being returned,
 // so it is always collision-free.
 func Plan(root string, matchers *Matchers) (Ownership, error) {
+	return PlanContext(context.Background(), root, matchers)
+}
+
+// PlanContext resolves ownership while honoring cancellation during the walk.
+func PlanContext(ctx context.Context, root string, matchers *Matchers) (Ownership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	ownership := make(Ownership)
 
 	resolver, err := sourcepath.New(root)
@@ -59,6 +68,9 @@ func Plan(root string, matchers *Matchers) (Ownership, error) {
 	}
 
 	walkErr := resolver.Walk(func(file sourcepath.File) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if matchers.Ignore != nil && matchers.Ignore.Excluded(file.BundlePath, false) {
 			return nil
 		}

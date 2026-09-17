@@ -135,9 +135,11 @@ func TestBuildReportsWarningsToObserver(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   changelog:
-    - /CHANGELOG.md
+    paths:
+      - /CHANGELOG.md
 `,
 		"README.md": "# hi",
 	})
@@ -171,9 +173,11 @@ settings:
   strict: true
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
   changelog:
-    - /CHANGELOG.md
+    paths:
+      - /CHANGELOG.md
 `,
 		"README.md": "# hi",
 	})
@@ -252,11 +256,11 @@ func TestBuildGoldenReproducibility(t *testing.T) {
 			name:         "gzip",
 			compression:  spec.CompressionGzip,
 			level:        6,
-			rootDigest:   "sha256:70f0086739931c66ec1366dd5e290cf98adf3f7aae72c967a3520d2325ffaaae",
+			rootDigest:   "sha256:d3422fd101852d0adabbb78860abf5ea84f34e25a1baeb820b1e3394333038b6",
 			configDigest: "sha256:0ebadf061aeb58c27c9151239872fab15c0ccd5fc5f515eee5870ec300668a14",
 			componentDigests: map[spec.ComponentType]string{
-				spec.ComponentDocumentation: "sha256:dfad74ebf66f3028e3f7a7ca6b59f3843d1efdd76fa7ad44a774edb417c292a7",
-				spec.ComponentLicense:       "sha256:94c92722dbb1c5731cee97d0e7a42c60ec03ba6f0dfe68ec43487a52d7cc3e15",
+				spec.ComponentDocumentation: "sha256:b3d72003504585614946fe20e427b5387ceb9082b983b4e03aaa078cef1c2fc8",
+				spec.ComponentLicense:       "sha256:1d6385e5b259f901d42677cd3c198151ea6cc184bd0108cf32d04da53cb348c6",
 			},
 		},
 		{

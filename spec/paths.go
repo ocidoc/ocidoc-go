@@ -11,6 +11,60 @@ import "strings"
 // User-provided annotations cannot use it.
 const reservedAnnotationPrefix = "org.ocidoc."
 
+type bundlePathNode struct {
+	children map[string]*bundlePathNode
+	path     string
+	anyPath  string
+}
+
+// IsMarkdownPath reports whether path has a supported Markdown extension.
+func IsMarkdownPath(path string) bool {
+	index := strings.LastIndex(path, ".")
+	if index < 0 {
+		return false
+	}
+
+	switch strings.ToLower(path[index:]) {
+	case ".md", ".markdown", ".mdown", ".mkd":
+		return true
+	default:
+		return false
+	}
+}
+
+// IsDocumentPath reports whether path has a supported document name or extension.
+// It intentionally excludes assets and source files even when they live below docs/.
+func IsDocumentPath(path string) bool {
+	if IsMarkdownPath(path) {
+		return true
+	}
+
+	lower := strings.ToLower(path)
+	for _, extension := range []string{".txt", ".html", ".htm"} {
+		if strings.HasSuffix(lower, extension) {
+			return true
+		}
+	}
+
+	name := lower
+	if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
+		name = name[slash+1:]
+	}
+	if strings.Contains(name, ".") {
+		return false
+	}
+
+	switch name {
+	case "readme", "license", "licence", "copying", "notice", "legal",
+		"copyright", "changelog", "changes", "history", "news", "security",
+		"support", "contributing", "code_of_conduct", "code-of-conduct",
+		"release_notes", "release-notes":
+		return true
+	default:
+		return false
+	}
+}
+
 // ValidateBundlePaths reports whether paths, taken together as one global virtual tree,
 // are free of exact duplicates and case-insensitive collisions.
 // Components do not have overlay semantics:
@@ -20,28 +74,42 @@ const reservedAnnotationPrefix = "org.ocidoc."
 // ValidateBundlePaths returns the first ValidateBundlePath error
 // it finds before checking for collisions.
 func ValidateBundlePaths(paths []string) error {
-	seen := make(map[string]string, len(paths)) // normalized (lowercase) -> original
+	root := &bundlePathNode{children: make(map[string]*bundlePathNode)}
 
 	for _, path := range paths {
 		if err := ValidateBundlePath(path); err != nil {
 			return err
 		}
 
-		key := strings.ToLower(path)
+		node := root
+		for segment := range strings.SplitSeq(path, "/") {
+			if node.path != "" {
+				return pathCollision(path, node.path, "ancestor")
+			}
 
-		original, exists := seen[key]
-		if !exists {
-			seen[key] = path
-			continue
+			key := strings.ToLower(segment)
+			child := node.children[key]
+			if child == nil {
+				child = &bundlePathNode{children: make(map[string]*bundlePathNode), anyPath: path}
+				node.children[key] = child
+			}
+			node = child
 		}
 
-		if original == path {
-			return &ValidationError{Code: CodePathCollision, Path: path, Message: "duplicate path"}
+		if node.path != "" {
+			if node.path == path {
+				return &ValidationError{Code: CodePathCollision, Path: path, Message: "duplicate path"}
+			}
+
+			return pathCollision(path, node.path, "case-insensitive")
+		}
+		if node.anyPath != "" && len(node.children) > 0 {
+			return pathCollision(path, node.anyPath, "descendant")
 		}
 
-		return &ValidationError{
-			Code: CodePathCollision, Path: path,
-			Message: "case-insensitive collision with " + original,
+		node.path = path
+		if node.anyPath == "" {
+			node.anyPath = path
 		}
 	}
 
@@ -63,4 +131,14 @@ func ValidateUserAnnotations(annotations map[string]string) error {
 	}
 
 	return nil
+}
+
+// pathCollision creates a validation error for two paths that collide.
+func pathCollision(path, original, kind string) error {
+	message := kind + " path collision with " + original
+	if kind == "case-insensitive" {
+		message = "case-insensitive collision with " + original
+	}
+
+	return &ValidationError{Code: CodePathCollision, Path: path, Message: message}
 }

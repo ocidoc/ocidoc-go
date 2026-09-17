@@ -6,6 +6,6 @@
     }
   },
   "components": {
-    "x-runbooks": ["/runbooks/**"]
+    "x-runbooks": {"paths": ["/runbooks/**"]}
   }
 }

@@ -156,7 +156,8 @@ document:
   variant: %s
 components:
   documentation:
-    - /README.md
+    paths:
+      - /README.md
 `, id, variant),
 		"README.md": content,
 	})

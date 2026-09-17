@@ -5,9 +5,9 @@
 package pathplan
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 
@@ -17,9 +17,6 @@ import (
 	"github.com/ocidoc/ocidoc-go/internal/sourcepath"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
-
-// markdownExtensions identifies which owned files get parsed for local dependencies.
-var markdownExtensions = []string{".md", ".markdown", ".mdown"}
 
 // DependencyOptions controls dependency filtering and invalid-reference handling.
 // Ignore must be the same compiled global matcher used by Plan.
@@ -51,6 +48,20 @@ func DiscoverDependencies(
 	ownership Ownership,
 	opts DependencyOptions,
 ) (Ownership, []string, error) {
+	return DiscoverDependenciesContext(context.Background(), root, ownership, opts)
+}
+
+// DiscoverDependenciesContext extends ownership while honoring cancellation.
+func DiscoverDependenciesContext(
+	ctx context.Context,
+	root string,
+	ownership Ownership,
+	opts DependencyOptions,
+) (Ownership, []string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
 	resolver, err := sourcepath.New(root)
 	if err != nil {
 		return nil, nil, err
@@ -72,7 +83,10 @@ func DiscoverDependencies(
 	}
 
 	for len(frontier) > 0 {
-		next, err := discoverWave(resolver, frontier, owner, opts, warningSet)
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		next, err := discoverWave(ctx, resolver, frontier, owner, opts, warningSet)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -113,6 +127,7 @@ func DiscoverDependencies(
 // each tentatively assigned to the component whose document referenced it.
 // A path claimed by two different components within this same wave is an *OwnershipConflictError.
 func discoverWave(
+	ctx context.Context,
 	resolver *sourcepath.Resolver,
 	frontier map[string]spec.ComponentType,
 	owner map[string]spec.ComponentType,
@@ -129,6 +144,9 @@ func discoverWave(
 	claims := make(map[string][]spec.ComponentType)
 
 	for _, p := range paths {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if !isMarkdown(p) {
 			continue
 		}
@@ -150,22 +168,30 @@ func discoverWave(
 		}
 
 		for _, target := range markdown.LocalTargets(content) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
 			resolved, err := resolver.ResolveReference(p, target)
 			if err != nil {
 				return nil, fmt.Errorf("%s: reference %q: %w", p, target, err)
 			}
+
 			ref := resolved.File.BundlePath
 			if opts.Ignore != nil && opts.Ignore.Excluded(ref, false) {
 				continue
 			}
+
 			if resolved.Kind != sourcepath.KindFile {
 				warning := invalidDependencyMessage(p, target, resolved.Kind)
 				if opts.Strict {
 					return nil, fmt.Errorf("%w: %s", spec.ErrInvalid, warning)
 				}
+
 				warnings[warning] = struct{}{}
 				continue
 			}
+
 			if _, owned := owner[ref]; owned {
 				continue
 			}
@@ -195,6 +221,7 @@ func discoverWave(
 	return next, nil
 }
 
+// invalidDependencyMessage formats the diagnostic for an invalid local dependency.
 func invalidDependencyMessage(referrer, target string, kind sourcepath.Kind) string {
 	reason := "is not a regular file"
 	if kind == sourcepath.KindMissing {
@@ -206,7 +233,7 @@ func invalidDependencyMessage(referrer, target string, kind sourcepath.Kind) str
 
 // isMarkdown reports whether path has a recognized Markdown extension.
 func isMarkdown(path string) bool {
-	return slices.Contains(markdownExtensions, filepath.Ext(path))
+	return spec.IsMarkdownPath(path)
 }
 
 // uniqueSorted returns components deduplicated and sorted.

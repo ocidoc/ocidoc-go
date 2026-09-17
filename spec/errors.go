@@ -48,6 +48,7 @@ const (
 	CodeReservedAnnotation         ValidationCode = "reserved-annotation"
 	CodeEmptyComponentRules        ValidationCode = "empty-component-rules"
 	CodeUndeclaredComponent        ValidationCode = "undeclared-component"
+	CodeInvalidLocale              ValidationCode = "invalid-locale"
 )
 
 // ValidationError reports one spec-level validation failure.
@@ -68,6 +69,9 @@ type ValidationError struct {
 	// Annotation identifies the affected annotation key, when applicable.
 	Annotation string
 
+	// Locale identifies the affected locale key, when applicable.
+	Locale string
+
 	// Message gives a human-readable explanation of the failed rule.
 	Message string
 }
@@ -86,6 +90,9 @@ func (e *ValidationError) Error() string {
 
 	case e.Annotation != "":
 		return fmt.Sprintf("%s: annotation %q: %s", e.Code, e.Annotation, e.Message)
+
+	case e.Locale != "":
+		return fmt.Sprintf("%s: locale %q: %s", e.Code, e.Locale, e.Message)
 
 	default:
 		return fmt.Sprintf("%s: %s", e.Code, e.Message)

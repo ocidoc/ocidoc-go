@@ -30,6 +30,10 @@ var defaultConfigYAML []byte
 // when no explicit explicit configuration path is given.
 var conventionalConfigNames = []string{"ocidoc.yaml", "ocidoc.yml", "ocidoc.json"}
 
+// ErrConfig identifies malformed or semantically invalid build configuration.
+// Callers can classify this input error separately from corrupted artifacts.
+var ErrConfig = errors.New("invalid build configuration")
+
 // LoadBuildConfig loads and validates the build config
 // for the source tree rooted at root, following this search order:
 //
@@ -58,11 +62,11 @@ func loadBuildConfig(root, explicitPath string) (*spec.BuildConfig, string, erro
 
 	cfg, err := parseBuildConfig(data, name)
 	if err != nil {
-		return nil, "", fmt.Errorf("parse build config %s: %w", name, err)
+		return nil, "", fmt.Errorf("%w: parse build config %s: %w", ErrConfig, name, err)
 	}
 
 	if err := spec.ValidateBuildConfig(cfg); err != nil {
-		return nil, "", fmt.Errorf("validate build config %s: %w", name, err)
+		return nil, "", fmt.Errorf("%w: validate build config %s: %w", ErrConfig, name, err)
 	}
 
 	return cfg, name, nil

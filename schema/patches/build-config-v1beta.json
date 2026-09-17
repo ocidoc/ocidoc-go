@@ -4,18 +4,39 @@
     "BuildConfig": {
       "properties": {
         "components": {
-          "minProperties": 1,
-          "propertyNames": {
-            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
-          },
-          "additionalProperties": {
-            "minItems": 1
-          }
-        },
-        "entrypoints": {
-          "propertyNames": {
-            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
-          }
+          "examples": [
+            {
+              "documentation": {
+                "paths": [
+                  "/README*.md",
+                  "/docs/**"
+                ],
+                "entrypoint": "/README.md",
+                "locales": {
+                  "en": {
+                    "default": true,
+                    "entrypoint": "/README.md",
+                    "paths": [
+                      "/README.md",
+                      "/docs/en/**"
+                    ]
+                  },
+                  "ru": {
+                    "entrypoint": "/README.ru.md",
+                    "paths": [
+                      "/README.ru.md",
+                      "/docs/ru/**"
+                    ]
+                  }
+                }
+              },
+              "changelog": {
+                "paths": [
+                  "/CHANGELOG.md"
+                ]
+              }
+            }
+          ]
         }
       }
     }

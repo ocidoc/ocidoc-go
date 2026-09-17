@@ -16,6 +16,19 @@ func TestValidateBundlePathsAccepts(t *testing.T) {
 	}
 }
 
+func TestIsDocumentPath(t *testing.T) {
+	for _, path := range []string{"README.md", "docs/guide.MDOWN", "notes.txt", "site.HTML", "README", "docs/NOTICE"} {
+		if !IsDocumentPath(path) {
+			t.Errorf("IsDocumentPath(%q) = false, want true", path)
+		}
+	}
+	for _, path := range []string{"docs/logo.svg", "docs/style.css", "docs/app.js", "docs/main.go", "docs/guide.rst", "docs/README.backup"} {
+		if IsDocumentPath(path) {
+			t.Errorf("IsDocumentPath(%q) = true, want false", path)
+		}
+	}
+}
+
 func TestValidateBundlePathsRejectsInvalidPath(t *testing.T) {
 	err := ValidateBundlePaths([]string{"README.md", "/absolute.md"})
 	if err == nil {
@@ -49,6 +62,18 @@ func TestValidateBundlePathsRejectsCaseInsensitiveCollision(t *testing.T) {
 	var verr *ValidationError
 	if !errors.As(err, &verr) || verr.Code != CodePathCollision {
 		t.Fatalf("got %v, want CodePathCollision", err)
+	}
+}
+
+func TestValidateBundlePathsRejectsFileDirectoryCollision(t *testing.T) {
+	for _, paths := range [][]string{
+		{"a", "a/b.md"},
+		{"a/b.md", "a"},
+		{"A", "a/b.md"},
+	} {
+		if err := ValidateBundlePaths(paths); err == nil {
+			t.Fatalf("ValidateBundlePaths(%q): expected file/directory collision", paths)
+		}
 	}
 }
 

@@ -6,6 +6,7 @@ package pathplan
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/woozymasta/pathrules"
@@ -75,8 +76,8 @@ func Compile(cfg *spec.BuildConfig) (*Matchers, error) {
 		matchers.Ignore = ignore
 	}
 
-	for name, rules := range cfg.Components {
-		matcher, err := compileRules(rules, componentParseOptions, pathrules.ActionExclude)
+	for name, component := range cfg.Components {
+		matcher, err := compileRules(component.Paths, componentParseOptions, pathrules.ActionExclude)
 		if err != nil {
 			return nil, fmt.Errorf("compile component %q rules: %w", name, err)
 		}
@@ -90,7 +91,11 @@ func Compile(cfg *spec.BuildConfig) (*Matchers, error) {
 // compileRules parses patterns (one rule per element) with parseOpts
 // and compiles them into a matcher that falls back to defaultAction
 // when no rule matches a given path.
-func compileRules(patterns []string, parseOpts pathrules.ParseOptions, defaultAction pathrules.Action) (*pathrules.Matcher, error) {
+func compileRules(
+	patterns []string,
+	parseOpts pathrules.ParseOptions,
+	defaultAction pathrules.Action,
+) (*pathrules.Matcher, error) {
 	rules, err := pathrules.ParseRulesString(strings.Join(patterns, "\n"), parseOpts)
 	if err != nil {
 		return nil, err
@@ -100,4 +105,58 @@ func compileRules(patterns []string, parseOpts pathrules.ParseOptions, defaultAc
 	opts.DefaultAction = defaultAction
 
 	return pathrules.NewMatcher(rules, opts)
+}
+
+// ClassifyLocales applies each component's locale rules
+// to document paths already owned by that component.
+// Locale rules never add paths to ownership or inspect the source tree.
+// The returned map contains every declared component locale,
+// including locales with no matches.
+func ClassifyLocales(
+	components map[spec.ComponentType]spec.ComponentBuildConfig,
+	ownership Ownership,
+) (map[spec.ComponentType]map[string][]string, error) {
+	resolved := make(map[spec.ComponentType]map[string][]string)
+	for component, config := range components {
+		if len(config.Locales) == 0 {
+			continue
+		}
+
+		documents := make([]string, 0, len(ownership[component]))
+		for _, path := range ownership[component] {
+			if spec.IsDocumentPath(path) {
+				documents = append(documents, path)
+			}
+		}
+		sort.Strings(documents)
+
+		keys := make([]string, 0, len(config.Locales))
+		for key := range config.Locales {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		componentLocales := make(map[string][]string, len(keys))
+		for _, key := range keys {
+			matcher, err := compileRules(
+				config.Locales[key].Paths,
+				componentParseOptions,
+				pathrules.ActionExclude,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("compile locale %q for component %q: %w", key, component, err)
+			}
+
+			matches := make([]string, 0)
+			for _, path := range documents {
+				if matcher.Included(path, false) {
+					matches = append(matches, path)
+				}
+			}
+			componentLocales[key] = matches
+		}
+		resolved[component] = componentLocales
+	}
+
+	return resolved, nil
 }

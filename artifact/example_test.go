@@ -23,7 +23,7 @@ func ExampleBuildArchive() {
 		panic(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "ocidoc.yaml"), []byte(
-		"schemaVersion: v1beta\ncomponents:\n  documentation:\n    - /README.md\n"), 0o600); err != nil {
+		"schemaVersion: v1beta\ncomponents:\n  documentation:\n    paths:\n      - /README.md\n"), 0o600); err != nil {
 		panic(err)
 	}
 

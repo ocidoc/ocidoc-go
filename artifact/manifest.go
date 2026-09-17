@@ -24,13 +24,31 @@ func buildArtifactConfig(plan *BuildPlan) *spec.ArtifactConfig {
 	components := make(map[spec.ComponentType]spec.ComponentConfig, len(plan.Ownership))
 
 	for name := range plan.Ownership {
-		components[name] = spec.ComponentConfig{Entrypoint: plan.Entrypoints[name]}
+		component := spec.ComponentConfig{Entrypoint: plan.Entrypoints[name]}
+		for locale, localePlan := range plan.Locales[name] {
+			component.Locales = ensureLocaleMap(component.Locales)
+			component.Locales[locale] = spec.ArtifactLocaleConfig{
+				Default:    localePlan.Default,
+				Entrypoint: localePlan.Entrypoint,
+				Files:      append([]string(nil), localePlan.Paths...),
+			}
+		}
+		components[name] = component
 	}
 
 	return &spec.ArtifactConfig{
 		SchemaVersion: spec.SchemaVersion,
 		Components:    components,
 	}
+}
+
+// ensureLocaleMap returns a usable locale map, allocating one when needed.
+func ensureLocaleMap(locales map[string]spec.ArtifactLocaleConfig) map[string]spec.ArtifactLocaleConfig {
+	if locales == nil {
+		return make(map[string]spec.ArtifactLocaleConfig)
+	}
+
+	return locales
 }
 
 // buildManifest assembles the root OCI manifest:

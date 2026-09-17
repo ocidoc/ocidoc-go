@@ -80,8 +80,9 @@ func TestListMultiFileComponent(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
-    - /docs/**
+    paths:
+      - /README.md
+      - /docs/**
 `,
 		"README.md":     "# hi",
 		"docs/guide.md": "guide content here",
@@ -127,8 +128,9 @@ func TestListEnforcesScanLimits(t *testing.T) {
 schemaVersion: v1beta
 components:
   documentation:
-    - /README.md
-    - /docs/**
+    paths:
+      - /README.md
+      - /docs/**
 `,
 		"README.md":     "# hi",
 		"docs/guide.md": "guide content here",

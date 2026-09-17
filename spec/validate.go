@@ -5,6 +5,7 @@
 package spec
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -39,50 +40,102 @@ var reservedWindowsNames = map[string]struct{}{
 // and for actual archive content, the archive builder.
 func ValidateBundlePath(path string) error {
 	if path == "" {
-		return &ValidationError{Code: CodeInvalidPath, Path: path, Message: "path must not be empty"}
+		return &ValidationError{
+			Code:    CodeInvalidPath,
+			Path:    path,
+			Message: "path must not be empty",
+		}
 	}
 
 	if !utf8.ValidString(path) {
-		return &ValidationError{Code: CodeInvalidPath, Path: path, Message: "path must be valid UTF-8"}
+		return &ValidationError{
+			Code:    CodeInvalidPath,
+			Path:    path,
+			Message: "path must be valid UTF-8",
+		}
 	}
 
 	if strings.ContainsRune(path, 0) {
-		return &ValidationError{Code: CodeInvalidPath, Path: path, Message: "path must not contain a NUL byte"}
+		return &ValidationError{
+			Code:    CodeInvalidPath,
+			Path:    path,
+			Message: "path must not contain a NUL byte",
+		}
 	}
 
 	if strings.Contains(path, "\\") {
-		return &ValidationError{Code: CodeInvalidPath, Path: path, Message: `path must use "/" as the separator, not "\"`}
+		return &ValidationError{
+			Code:    CodeInvalidPath,
+			Path:    path,
+			Message: `path must use "/" as the separator, not "\"`,
+		}
 	}
 
 	if strings.HasPrefix(path, "/") {
-		return &ValidationError{Code: CodeInvalidPath, Path: path, Message: "path must be relative"}
+		return &ValidationError{
+			Code:    CodeInvalidPath,
+			Path:    path,
+			Message: "path must be relative",
+		}
 	}
 
 	if driveLetterPattern.MatchString(path) {
-		return &ValidationError{Code: CodeInvalidPath, Path: path, Message: "path must not contain a drive letter"}
+		return &ValidationError{
+			Code:    CodeInvalidPath,
+			Path:    path,
+			Message: "path must not contain a drive letter",
+		}
 	}
 
 	for seg := range strings.SplitSeq(path, "/") {
 		switch seg {
 		case "":
-			return &ValidationError{Code: CodeInvalidPath, Path: path, Message: "path must not contain empty segments"}
+			return &ValidationError{
+				Code:    CodeInvalidPath,
+				Path:    path,
+				Message: "path must not contain empty segments",
+			}
+
 		case ".":
-			return &ValidationError{Code: CodeInvalidPath, Path: path, Message: `path must not contain "." segments`}
+			return &ValidationError{
+				Code:    CodeInvalidPath,
+				Path:    path,
+				Message: `path must not contain "." segments`,
+			}
+
 		case "..":
-			return &ValidationError{Code: CodeInvalidPath, Path: path, Message: `path must not contain ".." segments`}
+			return &ValidationError{
+				Code:    CodeInvalidPath,
+				Path:    path,
+				Message: `path must not contain ".." segments`,
+			}
 		}
 
-		if strings.HasSuffix(seg, ".") || strings.HasSuffix(seg, " ") || strings.HasPrefix(seg, " ") {
+		if strings.HasSuffix(seg, ".") ||
+			strings.HasSuffix(seg, " ") ||
+			strings.HasPrefix(seg, " ") {
 			return &ValidationError{
-				Code: CodeInvalidPath, Path: path,
+				Code:    CodeInvalidPath,
+				Path:    path,
 				Message: "path segments must not start or end with a space, or end with a dot",
 			}
 		}
 
+		for _, r := range seg {
+			if r < 0x20 || r == 0x7f || strings.ContainsRune(`< > : " | ? *`, r) {
+				return &ValidationError{
+					Code:    CodeInvalidPath,
+					Path:    path,
+					Message: fmt.Sprintf("path segment %q contains a character not portable to Windows", seg),
+				}
+			}
+		}
+
 		base, _, _ := strings.Cut(seg, ".")
-		if _, reserved := reservedWindowsNames[strings.ToUpper(base)]; reserved {
+		if isReservedWindowsName(strings.ToUpper(base)) {
 			return &ValidationError{
-				Code: CodeInvalidPath, Path: path,
+				Code:    CodeInvalidPath,
+				Path:    path,
 				Message: "path must not contain the Windows reserved name " + strings.ToUpper(base),
 			}
 		}
@@ -93,15 +146,21 @@ func ValidateBundlePath(path string) error {
 
 // ValidateArtifactConfig reports whether cfg is a well-formed v1beta artifact config:
 // a matching schemaVersion, at least one component,
-// and syntactically valid component names and entrypoints.
+// and syntactically valid component, locale and entrypoint data.
 // It does not check against the manifest layers or the filesystem.
 func ValidateArtifactConfig(cfg *ArtifactConfig) error {
 	if cfg == nil {
-		return &ValidationError{Code: CodeMissingSchemaVersion, Message: "artifact config must not be nil"}
+		return &ValidationError{
+			Code:    CodeMissingSchemaVersion,
+			Message: "artifact config must not be nil",
+		}
 	}
 
 	if cfg.SchemaVersion == "" {
-		return &ValidationError{Code: CodeMissingSchemaVersion, Message: "schemaVersion is required"}
+		return &ValidationError{
+			Code:    CodeMissingSchemaVersion,
+			Message: "schemaVersion is required",
+		}
 	}
 
 	if cfg.SchemaVersion != SchemaVersion {
@@ -119,7 +178,10 @@ func ValidateArtifactConfig(cfg *ArtifactConfig) error {
 	}
 
 	if len(cfg.Components) == 0 {
-		return &ValidationError{Code: CodeNoComponents, Message: "artifact config must declare at least one component"}
+		return &ValidationError{
+			Code:    CodeNoComponents,
+			Message: "artifact config must declare at least one component",
+		}
 	}
 
 	for name, component := range cfg.Components {
@@ -127,12 +189,152 @@ func ValidateArtifactConfig(cfg *ArtifactConfig) error {
 			return err
 		}
 
-		if component.Entrypoint == "" {
-			continue
+		if err := ValidateBundleEntrypoint(string(name), component.Entrypoint); err != nil {
+			return err
+		}
+		if err := ValidateArtifactLocales(string(name), component.Locales); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateLocaleKey reports whether an opaque locale key is safe as metadata.
+// It does not normalize or interpret the key as a language tag.
+func ValidateLocaleKey(key string) error {
+	if key == "" {
+		return &ValidationError{
+			Code:    CodeInvalidLocale,
+			Message: "locale key must not be empty",
+		}
+	}
+
+	if !utf8.ValidString(key) {
+		return &ValidationError{
+			Code:    CodeInvalidLocale,
+			Locale:  key,
+			Message: "locale key must be valid UTF-8",
+		}
+	}
+
+	if strings.TrimSpace(key) != key {
+		return &ValidationError{
+			Code:    CodeInvalidLocale,
+			Locale:  key,
+			Message: "locale key must not have leading or trailing whitespace",
+		}
+	}
+
+	for _, r := range key {
+		if r < 0x20 || r == 0x7f {
+			return &ValidationError{
+				Code:    CodeInvalidLocale,
+				Locale:  key,
+				Message: "locale key must not contain control characters",
+			}
+		}
+	}
+
+	return nil
+}
+
+// ValidateBuildLocales validates locale keys and build-time path-rule lists.
+// An explicitly declared locale must contain at least one rule.
+func ValidateBuildLocales(component string, locales map[string]BuildLocaleConfig) error {
+	defaults := 0
+	for key, locale := range locales {
+		if err := ValidateLocaleKey(key); err != nil {
+			return err
 		}
 
-		if err := ValidateBundlePath(component.Entrypoint); err != nil {
+		if len(locale.Paths) == 0 {
+			return &ValidationError{
+				Code:      CodeInvalidLocale,
+				Component: component,
+				Locale:    key,
+				Message:   "locale must declare at least one path rule",
+			}
+		}
+
+		if locale.Default {
+			defaults++
+		}
+		if defaults > 1 {
+			return &ValidationError{
+				Code:      CodeInvalidLocale,
+				Component: component,
+				Locale:    key,
+				Message:   "component may declare only one default locale",
+			}
+		}
+	}
+
+	return nil
+}
+
+// ValidateArtifactLocales validates locale keys and resolved bundle-relative paths.
+// It does not check that paths exist or have a document type.
+func ValidateArtifactLocales(component string, locales map[string]ArtifactLocaleConfig) error {
+	defaults := 0
+	for key, locale := range locales {
+		if err := ValidateLocaleKey(key); err != nil {
 			return err
+		}
+		if err := ValidateBundleEntrypoint(component, locale.Entrypoint); err != nil {
+			return err
+		}
+
+		if locale.Default {
+			defaults++
+		}
+
+		if defaults > 1 {
+			return &ValidationError{
+				Code:      CodeInvalidLocale,
+				Component: component,
+				Locale:    key,
+				Message:   "component may declare only one default locale",
+			}
+		}
+
+		seen := make(map[string]struct{}, len(locale.Files))
+		for _, path := range locale.Files {
+			if err := ValidateBundlePath(path); err != nil {
+				return &ValidationError{
+					Code:    CodeInvalidLocale,
+					Locale:  key,
+					Path:    path,
+					Message: err.Error(),
+				}
+			}
+			if _, ok := seen[path]; ok {
+				return &ValidationError{
+					Code:    CodeInvalidLocale,
+					Locale:  key,
+					Path:    path,
+					Message: "duplicate locale path",
+				}
+			}
+			seen[path] = struct{}{}
+		}
+	}
+
+	return nil
+}
+
+// ValidateBundleEntrypoint validates an optional component or locale entrypoint.
+func ValidateBundleEntrypoint(component, entrypoint string) error {
+	if entrypoint == "" {
+		return nil
+	}
+
+	if err := ValidateBundlePath(entrypoint); err != nil {
+		return &ValidationError{
+			Code:      CodeInvalidPath,
+			Component: component,
+			Path:      entrypoint,
+			Message:   "invalid entrypoint: " + err.Error(),
 		}
 	}
 
@@ -157,4 +359,23 @@ func DocumentationTag(d digest.Digest) (string, error) {
 	}
 
 	return d.Algorithm().String() + "-" + d.Encoded() + ".doc", nil
+}
+
+// isReservedWindowsName reports whether base is reserved by Windows.
+func isReservedWindowsName(base string) bool {
+	if _, reserved := reservedWindowsNames[base]; reserved {
+		return true
+	}
+
+	if !strings.HasPrefix(base, "COM") && !strings.HasPrefix(base, "LPT") {
+		return false
+	}
+
+	suffix := strings.TrimPrefix(strings.TrimPrefix(base, "COM"), "LPT")
+	switch suffix {
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9", "¹", "²", "³":
+		return true
+	default:
+		return false
+	}
 }

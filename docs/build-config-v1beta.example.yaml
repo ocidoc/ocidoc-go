@@ -1,37 +1,90 @@
-# Annotations adds custom key/value pairs to the built artifact's root OCI manifest.
-# Keys starting with "org.ocidoc." are reserved for OCIDoc itself and rejected here.
-annotations: {}
-# Components maps each component name to the path rules that select its files from the source tree.
-# At least one component with at least one rule is required.
-# A name is either one of the standard component types
-# (documentation, license, changelog, release-notes, security, contributing, code-of-conduct, support)
-# or a custom "x-"-prefixed extension name.
-components: {}
-# Document sets the built artifact's document identity (id and variant).
-# Omit it to build the default document.
-document:
-  # ID identifies this artifact among multiple documentation artifacts
-  # that may be attached to the same subject.
-  # Default: default
-  id: default
-  # Variant distinguishes multiple documents that share the same ID,
-  # for example "operator" versus "user".
-  # Omit it when only one variant of this document exists.
-  variant: <string>
-# Entrypoints overrides the automatically detected primary file for one or more components, keyed by component name.
-# A component not listed here falls back to automatic detection
-# (for example, README.md for the documentation component).
-entrypoints: {}
-# Ignore lists path rules excluded from every component, applied after component matching.
-# A rule prefixed with "!" is a negation: it restores a path an earlier ignore rule
-# (here or in a component's own rules) would otherwise have excluded.
-ignore:
-  - <string>
+# yaml-language-server: $schema=schema/build-config-v1beta.json
+
 # SchemaVersion is the build config format version.
-# The only currently supported value is "v1beta".
+# The only currently supported value is `v1beta`.
 # Default: v1beta
 # Allowed values: v1beta
 schemaVersion: v1beta
+# Annotations adds custom key/value pairs to the built artifact's root OCI manifest.
+# Keys starting with `org.ocidoc.` are reserved for OCIDoc itself and rejected here.
+annotations:
+  example: <string>
+# Components maps component names to their source selection
+# and optional localized document sets.
+# Built-in v1beta component names:
+#   - documentation
+#   - license
+#   - changelog
+#   - release-notes
+#   - security
+#   - contributing
+#   - code-of-conduct
+#   - support
+# Custom components are allowed when their names use the `x-` prefix,
+# for example, `x-api` or `x-runbooks`. Other names are rejected.
+# At least one component with one or more path rules is required.
+# The same source file cannot be assigned to more than one component.
+components:
+  # ComponentBuildConfig selects one component's source files and optional localized document sets.
+  changelog:
+    # Paths selects this component's files from the source tree.
+    # Rules are repository-root-relative and normally begin with `/`.
+    # Glob patterns are supported, and a rule beginning with `!` excludes a previously matched path.
+    # These rules select the component's complete file set, including assets.
+    # Locale rules below classify only its document files.
+    paths:
+      - /CHANGELOG.md
+  # ComponentBuildConfig selects one component's source files and optional localized document sets.
+  documentation:
+    # Paths selects this component's files from the source tree.
+    # Rules are repository-root-relative and normally begin with `/`.
+    # Glob patterns are supported, and a rule beginning with `!` excludes a previously matched path.
+    # These rules select the component's complete file set, including assets.
+    # Locale rules below classify only its document files.
+    paths:
+      - /README*.md
+      - /docs/**
+    # Entrypoint overrides automatic detection of this component's primary file.
+    # The path is root-relative and may begin with `/` in build configuration.
+    # It must resolve to a file selected by Paths.
+    # Omit it to use deterministic component-specific detection, such as `README.md` for documentation.
+    entrypoint: /README.md
+    # Locales maps locale keys to path rules selecting this component's localized documents.
+    # Locale keys are opaque identifiers such as `en` or `ru` and are local to this component;
+    # the same key may select different files in different components.
+    # Locale rules never add files to the component and cannot select files owned elsewhere.
+    # The default locale is optional; when omitted, renderers use the first locale in sorted key order.
+    locales:
+      # BuildLocaleConfig selects one component's document files for one locale.
+      en:
+        # Default marks the preferred fallback locale for the component.
+        # At most one locale per component may set it.
+        # It affects renderer fallback and the fallback information stored in artifact metadata, not component ownership.
+        default: true
+        # Entrypoint overrides automatic selection of this locale's primary document.
+        # The path is root-relative and may begin with `/` in build configuration.
+        # It must be one of the documents selected by this locale's Paths.
+        entrypoint: /README.md
+        # Paths selects this component's document files for the locale.
+        # Rules are evaluated only against documents already owned by the parent component.
+        # Assets and source files are not locale members.
+        # An empty match is a warning by default and an error in strict mode.
+        paths:
+          - /README.md
+          - /docs/en/**
+      # BuildLocaleConfig selects one component's document files for one locale.
+      ru:
+        # Entrypoint overrides automatic selection of this locale's primary document.
+        # The path is root-relative and may begin with `/` in build configuration.
+        # It must be one of the documents selected by this locale's Paths.
+        entrypoint: /README.ru.md
+        # Paths selects this component's document files for the locale.
+        # Rules are evaluated only against documents already owned by the parent component.
+        # Assets and source files are not locale members.
+        # An empty match is a warning by default and an error in strict mode.
+        paths:
+          - /README.ru.md
+          - /docs/ru/**
 # Settings controls build-time behavior that does not change the resulting artifact's logical identity:
 # strict mode and component compression.
 # Omit it to use the documented defaults (strict mode off, gzip at level 6).
@@ -41,16 +94,31 @@ settings:
   compression:
     # Level controls the compression level used by the selected compressor.
     # Higher levels may reduce artifact size at the cost of additional CPU time during build.
+    # Values above the selected compressor's maximum are accepted and clamped
+    # when the final compression settings are applied.
     # Default: 6
     level: 6
     # Type selects the compression algorithm used for component layers.
-    # Gzip is the default and has the broadest registry client support;
-    # zstd typically compresses faster and smaller at a comparable level,
-    # at the cost of less universal tooling support.
+    #   - `gzip` is the default and has the broadest registry client support;
+    #   - `zstd` typically compresses faster and smaller at a comparable level, at the cost of less universal tooling support.
     # Default: gzip
     # Allowed values: gzip, zstd
     type: gzip
-  # Strict rejects a build where a declared component matches no files in the source tree,
-  # instead of only warning about it.
+  # Strict rejects a build where a declared component or locale matches no files, instead of only warning about it.
   # Default: false
   strict: false
+# Document sets the built artifact's document identity (id and variant).
+# Omit it to build the default document.
+document:
+  # ID identifies this artifact among multiple documentation artifacts that may be attached to the same subject.
+  # Default: default
+  id: default
+  # Variant distinguishes multiple documents that share the same ID, for example `operator` versus `user`.
+  # Omit it when only one variant of this document exists.
+  variant: <string>
+# Ignore lists path rules excluded from every component, applied after component matching.
+# A rule prefixed with `!` is a negation:
+# it restores a path an earlier ignore rule would otherwise have excluded.
+# Ignore rules are useful for repository metadata or generated files that match a broad component rule.
+ignore:
+  - /.git/**

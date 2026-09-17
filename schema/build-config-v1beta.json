@@ -2,62 +2,83 @@
   "$defs": {
     "BuildConfig": {
       "additionalProperties": false,
-      "description": "BuildConfig is the writer input read from ocidoc.yaml/ocidoc.json or an explicitly selected configuration file.",
+      "description": "BuildConfig is the source-tree configuration read from `ocidoc.yaml`, `ocidoc.json`, or an explicitly selected configuration file.",
       "properties": {
         "annotations": {
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Annotations adds custom key/value pairs to the built artifact's root OCI manifest.\nKeys starting with \"org.ocidoc.\" are reserved for OCIDoc itself and rejected here.",
-          "type": "object"
+          "description": "Annotations adds custom key/value pairs to the built artifact's root OCI manifest.\nKeys starting with `org.ocidoc.` are reserved for OCIDoc itself and rejected here.",
+          "type": "object",
+          "x-order": "2"
         },
         "components": {
           "additionalProperties": {
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array"
+            "$ref": "#/$defs/ComponentBuildConfig"
           },
-          "description": "Components maps each component name to the path rules that select its files from the source tree.\nAt least one component with at least one rule is required.\nA name is either one of the standard component types\n(documentation, license, changelog, release-notes, security, contributing, code-of-conduct, support)\nor a custom \"x-\"-prefixed extension name.",
-          "minProperties": 1,
-          "propertyNames": {
-            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
-          },
-          "type": "object"
+          "description": "Components maps component names to their source selection\nand optional localized document sets.\n\nBuilt-in v1beta component names:\n\n  - documentation\n  - license\n  - changelog\n  - release-notes\n  - security\n  - contributing\n  - code-of-conduct\n  - support\n\nCustom components are allowed when their names use the `x-` prefix,\nfor example, `x-api` or `x-runbooks`. Other names are rejected.\nAt least one component with one or more path rules is required.\nThe same source file cannot be assigned to more than one component.",
+          "examples": [
+            {
+              "changelog": {
+                "paths": [
+                  "/CHANGELOG.md"
+                ]
+              },
+              "documentation": {
+                "entrypoint": "/README.md",
+                "locales": {
+                  "en": {
+                    "default": true,
+                    "entrypoint": "/README.md",
+                    "paths": [
+                      "/README.md",
+                      "/docs/en/**"
+                    ]
+                  },
+                  "ru": {
+                    "entrypoint": "/README.ru.md",
+                    "paths": [
+                      "/README.ru.md",
+                      "/docs/ru/**"
+                    ]
+                  }
+                },
+                "paths": [
+                  "/README*.md",
+                  "/docs/**"
+                ]
+              }
+            }
+          ],
+          "type": "object",
+          "x-order": "3"
         },
         "document": {
           "$ref": "#/$defs/DocumentSettings",
-          "description": "Document sets the built artifact's document identity (id and variant).\nOmit it to build the default document."
-        },
-        "entrypoints": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Entrypoints overrides the automatically detected primary file for one or more components, keyed by component name.\nA component not listed here falls back to automatic detection\n(for example, README.md for the documentation component).",
-          "propertyNames": {
-            "pattern": "^(?:documentation|license|changelog|release-notes|security|contributing|code-of-conduct|support|x-[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
-          },
-          "type": "object"
+          "description": "Document sets the built artifact's document identity (id and variant).\nOmit it to build the default document.",
+          "x-order": "5"
         },
         "ignore": {
-          "description": "Ignore lists path rules excluded from every component, applied after component matching.\nA rule prefixed with \"!\" is a negation: it restores a path an earlier ignore rule\n(here or in a component's own rules) would otherwise have excluded.",
+          "description": "Ignore lists path rules excluded from every component, applied after component matching.\nA rule prefixed with `!` is a negation:\nit restores a path an earlier ignore rule would otherwise have excluded.\nIgnore rules are useful for repository metadata or generated files that match a broad component rule.",
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "x-order": "6"
         },
         "schemaVersion": {
           "default": "v1beta",
-          "description": "SchemaVersion is the build config format version.\nThe only currently supported value is \"v1beta\".",
+          "description": "SchemaVersion is the build config format version.\nThe only currently supported value is `v1beta`.",
           "enum": [
             "v1beta"
           ],
-          "type": "string"
+          "type": "string",
+          "x-order": "1"
         },
         "settings": {
           "$ref": "#/$defs/BuildSettings",
-          "description": "Settings controls build-time behavior that does not change the resulting artifact's logical identity:\nstrict mode and component compression.\nOmit it to use the documented defaults (strict mode off, gzip at level 6)."
+          "description": "Settings controls build-time behavior that does not change the resulting artifact's logical identity:\nstrict mode and component compression.\nOmit it to use the documented defaults (strict mode off, gzip at level 6).",
+          "x-order": "4"
         }
       },
       "required": [
@@ -66,20 +87,83 @@
       ],
       "type": "object"
     },
+    "BuildLocaleConfig": {
+      "additionalProperties": false,
+      "description": "BuildLocaleConfig selects one component's document files for one locale.",
+      "properties": {
+        "default": {
+          "description": "Default marks the preferred fallback locale for the component.\nAt most one locale per component may set it.\nIt affects renderer fallback and the fallback information stored in artifact metadata, not component ownership.",
+          "type": "boolean",
+          "x-order": "1"
+        },
+        "entrypoint": {
+          "description": "Entrypoint overrides automatic selection of this locale's primary document.\nThe path is root-relative and may begin with `/` in build configuration.\nIt must be one of the documents selected by this locale's Paths.",
+          "type": "string",
+          "x-order": "2"
+        },
+        "paths": {
+          "description": "Paths selects this component's document files for the locale.\n\nRules are evaluated only against documents already owned by the parent component.\nAssets and source files are not locale members.\n\nAn empty match is a warning by default and an error in strict mode.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "x-order": "3"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    },
     "BuildSettings": {
       "additionalProperties": false,
-      "description": "BuildSettings holds writer-behavior options that are not part of the resulting artifact's identity.",
+      "description": "BuildSettings holds optional build behavior that is not part of the resulting artifact's identity.",
       "properties": {
         "compression": {
           "$ref": "#/$defs/CompressionSettings",
-          "description": "Compression selects how OCIDoc component layers are compressed.\nOmit it to use the default: gzip at level 6."
+          "description": "Compression selects how OCIDoc component layers are compressed.\nOmit it to use the default: gzip at level 6.",
+          "x-order": "1"
         },
         "strict": {
           "default": false,
-          "description": "Strict rejects a build where a declared component matches no files in the source tree,\ninstead of only warning about it.",
-          "type": "boolean"
+          "description": "Strict rejects a build where a declared component or locale matches no files, instead of only warning about it.",
+          "type": "boolean",
+          "x-order": "2"
         }
       },
+      "type": "object"
+    },
+    "ComponentBuildConfig": {
+      "additionalProperties": false,
+      "description": "ComponentBuildConfig selects one component's source files and optional localized document sets.",
+      "properties": {
+        "entrypoint": {
+          "description": "Entrypoint overrides automatic detection of this component's primary file.\nThe path is root-relative and may begin with `/` in build configuration.\nIt must resolve to a file selected by Paths.\nOmit it to use deterministic component-specific detection, such as `README.md` for documentation.",
+          "type": "string",
+          "x-order": "2"
+        },
+        "locales": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BuildLocaleConfig"
+          },
+          "description": "Locales maps locale keys to path rules selecting this component's localized documents.\n\nLocale keys are opaque identifiers such as `en` or `ru` and are local to this component;\nthe same key may select different files in different components.\n\nLocale rules never add files to the component and cannot select files owned elsewhere.\nThe default locale is optional; when omitted, renderers use the first locale in sorted key order.",
+          "type": "object",
+          "x-order": "3"
+        },
+        "paths": {
+          "description": "Paths selects this component's files from the source tree.\n\nRules are repository-root-relative and normally begin with `/`.\nGlob patterns are supported, and a rule beginning with `!` excludes a previously matched path.\n\nThese rules select the component's complete file set, including assets.\nLocale rules below classify only its document files.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "x-order": "1"
+        }
+      },
+      "required": [
+        "paths"
+      ],
       "type": "object"
     },
     "CompressionSettings": {
@@ -88,35 +172,38 @@
       "properties": {
         "level": {
           "default": 6,
-          "description": "Level controls the compression level used by the selected compressor.\nHigher levels may reduce artifact size at the cost of additional CPU time during build.",
-          "maximum": 19,
+          "description": "Level controls the compression level used by the selected compressor.\nHigher levels may reduce artifact size at the cost of additional CPU time during build.\nValues above the selected compressor's maximum are accepted and clamped\nwhen the final compression settings are applied.",
           "minimum": 0,
-          "type": "integer"
+          "type": "integer",
+          "x-order": "1"
         },
         "type": {
           "default": "gzip",
-          "description": "Type selects the compression algorithm used for component layers.\nGzip is the default and has the broadest registry client support;\nzstd typically compresses faster and smaller at a comparable level,\nat the cost of less universal tooling support.",
+          "description": "Type selects the compression algorithm used for component layers.\n\n  - `gzip` is the default and has the broadest registry client support;\n  - `zstd` typically compresses faster and smaller at a comparable level, at the cost of less universal tooling support.",
           "enum": [
             "gzip",
             "zstd"
           ],
-          "type": "string"
+          "type": "string",
+          "x-order": "2"
         }
       },
       "type": "object"
     },
     "DocumentSettings": {
       "additionalProperties": false,
-      "description": "DocumentSettings sets the document identity tuple (see AnnotationDocumentID and related constants) for the artifact being built.",
+      "description": "DocumentSettings sets the identity shown for the document artifact.",
       "properties": {
         "id": {
           "default": "default",
-          "description": "ID identifies this artifact among multiple documentation artifacts\nthat may be attached to the same subject.",
-          "type": "string"
+          "description": "ID identifies this artifact among multiple documentation artifacts that may be attached to the same subject.",
+          "type": "string",
+          "x-order": "1"
         },
         "variant": {
-          "description": "Variant distinguishes multiple documents that share the same ID,\nfor example \"operator\" versus \"user\".\nOmit it when only one variant of this document exists.",
-          "type": "string"
+          "description": "Variant distinguishes multiple documents that share the same ID, for example `operator` versus `user`.\nOmit it when only one variant of this document exists.",
+          "type": "string",
+          "x-order": "2"
         }
       },
       "type": "object"

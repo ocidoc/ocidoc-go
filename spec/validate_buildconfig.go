@@ -5,8 +5,8 @@
 package spec
 
 // ValidateBuildConfig reports whether cfg is a well-formed v1beta build config:
-// a matching schemaVersion, at least one component with a non-empty rule list
-// syntactically valid component names, entrypoints that reference a declared component,
+// a matching schemaVersion, at least one component with a non-empty path list,
+// syntactically valid component names, localized component rules,
 // non-reserved annotations and a supported compression type.
 //
 // It validates config shape only.
@@ -33,25 +33,13 @@ func ValidateBuildConfig(cfg *BuildConfig) error {
 		return &ValidationError{Code: CodeNoComponents, Message: "build config must declare at least one component"}
 	}
 
-	for name, rules := range cfg.Components {
+	for name, component := range cfg.Components {
 		if err := ValidateComponentType(string(name)); err != nil {
 			return err
 		}
 
-		if len(rules) == 0 {
-			return &ValidationError{
-				Code: CodeEmptyComponentRules, Component: string(name),
-				Message: "component must declare at least one path rule",
-			}
-		}
-	}
-
-	for name := range cfg.Entrypoints {
-		if _, declared := cfg.Components[name]; !declared {
-			return &ValidationError{
-				Code: CodeUndeclaredComponent, Component: string(name),
-				Message: "entrypoint references a component not present in components",
-			}
+		if err := ValidateComponentBuildConfig(string(name), component); err != nil {
+			return err
 		}
 	}
 
@@ -65,7 +53,25 @@ func ValidateBuildConfig(cfg *BuildConfig) error {
 				return err
 			}
 		}
+		if cfg.Settings.Compression.Level != nil && *cfg.Settings.Compression.Level < 0 {
+			return &ValidationError{
+				Code:    CodeUnsupportedCompression,
+				Message: "compression level must not be negative",
+			}
+		}
 	}
 
 	return nil
+}
+
+// ValidateComponentBuildConfig validates one component's source and locale rules.
+func ValidateComponentBuildConfig(name string, component ComponentBuildConfig) error {
+	if len(component.Paths) == 0 {
+		return &ValidationError{
+			Code: CodeEmptyComponentRules, Component: name,
+			Message: "component must declare at least one path rule",
+		}
+	}
+
+	return ValidateBuildLocales(name, component.Locales)
 }
