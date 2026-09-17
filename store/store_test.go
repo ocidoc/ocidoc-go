@@ -505,6 +505,73 @@ func TestStoreSerializesConcurrentCommitsOnOneHandle(t *testing.T) {
 	}
 }
 
+func TestVerifyRepairRebuildsMissingOrVersionlessCatalog(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T, path string)
+	}{
+		{
+			name: "missing",
+			mutate: func(t *testing.T, path string) {
+				if err := os.Remove(path); err != nil {
+					t.Fatalf("Remove catalog: %v", err)
+				}
+			},
+		},
+		{
+			name: "versionless",
+			mutate: func(t *testing.T, path string) {
+				if err := os.WriteFile(path, []byte(`{"documents":{}}`), 0o600); err != nil {
+					t.Fatalf("WriteFile catalog: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			s, err := Open(root)
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			committed, err := s.Commit(t.Context(), buildTestArtifact(t, "# "+test.name), Origin{Source: "build"})
+			if err != nil {
+				t.Fatalf("Commit: %v", err)
+			}
+
+			test.mutate(t, filepath.Join(root, catalogFileName))
+
+			repaired, err := s.Verify(t.Context(), true, true)
+			if err != nil {
+				t.Fatalf("Verify repair: %v", err)
+			}
+			if !repaired.Valid {
+				t.Fatalf("Verify repair is invalid: %+v", repaired)
+			}
+			if len(repaired.Repaired) == 0 {
+				t.Fatal("Verify repair reported no repaired catalog state")
+			}
+
+			verified, err := s.Verify(t.Context(), false, true)
+			if err != nil {
+				t.Fatalf("Verify after repair: %v", err)
+			}
+			if !verified.Valid || verified.Documents != 1 {
+				t.Fatalf("Verify after repair = %+v", verified)
+			}
+
+			docs, err := s.Documents()
+			if err != nil {
+				t.Fatalf("Documents: %v", err)
+			}
+			if len(docs) != 1 || docs[0].Manifest != committed.Manifest {
+				t.Fatalf("repaired documents = %+v", docs)
+			}
+		})
+	}
+}
+
 func TestVerifyRepairDoesNotOverwriteFutureCatalog(t *testing.T) {
 	root := t.TempDir()
 
