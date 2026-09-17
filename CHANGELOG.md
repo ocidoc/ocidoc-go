@@ -14,6 +14,35 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [Unreleased]
+
+### Added
+
+* Component-local locale configuration with per-locale path rules,
+  resolved bundle files, entrypoints and fallback markers.
+* Context cancellation is now propagated through archive extraction
+  and build planning.
+* `artifact.Diff` reporting for root annotation,
+  manifest subject and locale metadata changes.
+* `store.Store.ExportFile` for atomic export to a filesystem path.
+
+### Changed
+
+* Component configuration entries now use structured objects with `paths`,
+  `entrypoint` and optional `locales` instead of raw path-rule arrays.
+* Local-store commits and metadata updates now coordinate concurrent handles
+  and publish files atomically;
+  catalog state is rebuilt from the OCI index when needed.
+* Generated configuration schemas now include canonical IDs,
+  dynamic component constraints and realistic structured examples.
+* Schema documentation now reflects effective compression-level normalization.
+
+### Fixed
+
+* Hardened archive extraction and component streams by draining
+  and verifying trailing data
+  and removing partial files after failed extraction.
+
 ## [0.2.0][] - 2026-08-17
 
 ### Added
