@@ -19,6 +19,8 @@ schema2doc:
   mode: all
   format: yaml
   output: docs/build-config-v1beta.md
+  source_path: ../schema/build-config-v1beta.json
+  source_raw_path: https://raw.githubusercontent.com/ocidoc/ocidoc-go/refs/heads/master/schema/build-config-v1beta.json
 
 schema2yaml:
   mode: all
@@ -46,3 +48,5 @@ schema2doc:
   mode: all
   format: json
   output: docs/artifact-config-v1beta.md
+  source_path: ../schema/artifact-config-v1beta.json
+  source_raw_path: https://raw.githubusercontent.com/ocidoc/ocidoc-go/refs/heads/master/schema/artifact-config-v1beta.json

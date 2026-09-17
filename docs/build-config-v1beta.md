@@ -3,7 +3,8 @@
 
 # OCIDoc build configuration (v1beta)
 
-* Source file: [`schema/build-config-v1beta.json`](schema/build-config-v1beta.json)
+* Source file: [`../schema/build-config-v1beta.json`](../schema/build-config-v1beta.json)
+* Source URL: [Raw schema URL](https://raw.githubusercontent.com/ocidoc/ocidoc-go/refs/heads/master/schema/build-config-v1beta.json)
 * Schema identifier: `https://ocidoc.org/schema/build-config-v1beta.json`
 * JSON Schema version: `https://json-schema.org/draft/2020-12/schema`
 * Version support: `supported (2020-12)`
@@ -393,6 +394,8 @@ Variant distinguishes multiple documents that share the same ID, for example
 ## Example yaml document
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ocidoc/ocidoc-go/refs/heads/master/schema/build-config-v1beta.json
+
 # SchemaVersion is the build config format version.
 # The only currently supported value is `v1beta`.
 # Default: v1beta

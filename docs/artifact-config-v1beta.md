@@ -3,7 +3,8 @@
 
 # OCIDoc artifact configuration (v1beta)
 
-* Source file: [`schema/artifact-config-v1beta.json`](schema/artifact-config-v1beta.json)
+* Source file: [`../schema/artifact-config-v1beta.json`](../schema/artifact-config-v1beta.json)
+* Source URL: [Raw schema URL](https://raw.githubusercontent.com/ocidoc/ocidoc-go/refs/heads/master/schema/artifact-config-v1beta.json)
 * Schema identifier: `https://ocidoc.org/schema/artifact-config-v1beta.json`
 * JSON Schema version: `https://json-schema.org/draft/2020-12/schema`
 * Version support: `supported (2020-12)`
