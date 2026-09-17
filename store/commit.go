@@ -125,6 +125,7 @@ func (s *Store) commitComponents(ctx context.Context, source artifact.Reader) er
 	return nil
 }
 
+// commitComponent stores one component blob when it is not already present.
 func (s *Store) commitComponent(ctx context.Context, source artifact.Reader, comp artifact.ComponentDescriptor) error {
 	rc, _, err := source.OpenComponent(ctx, comp.Type)
 	if err != nil {
@@ -151,7 +152,8 @@ func (s *Store) commitManifest(ctx context.Context, source artifact.Reader, root
 // the store's deduplication boundary:
 // identical blobs from independent documents exist only once.
 func (s *Store) pushIfMissing(ctx context.Context, desc ocispec.Descriptor, content io.Reader) error {
-	exists, err := s.oci.Exists(ctx, desc)
+	ociStore := s.ociStore()
+	exists, err := ociStore.Exists(ctx, desc)
 	if err != nil {
 		return fmt.Errorf("check %s: %w", desc.Digest, err)
 	}
@@ -160,7 +162,7 @@ func (s *Store) pushIfMissing(ctx context.Context, desc ocispec.Descriptor, cont
 		return nil
 	}
 
-	if err := s.oci.Push(ctx, desc, content); err != nil {
+	if err := ociStore.Push(ctx, desc, content); err != nil {
 		return fmt.Errorf("store %s: %w", desc.Digest, err)
 	}
 

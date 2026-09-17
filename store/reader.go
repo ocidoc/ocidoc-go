@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/opencontainers/go-digest"
@@ -21,6 +19,18 @@ import (
 	"github.com/ocidoc/ocidoc-go/internal/ociclone"
 	"github.com/ocidoc/ocidoc-go/spec"
 )
+
+// storeReader implements artifact.Reader over one manifest in Store.
+type storeReader struct {
+	// manifest is the verified root manifest selected by OpenDocument.
+	manifest *ocispec.Manifest
+
+	// store provides lazy config and component reads.
+	store *Store
+
+	// root identifies manifest in the shared OCI content store.
+	root ocispec.Descriptor
+}
 
 // OpenDocument opens the committed OCIDoc manifest identified by manifest.
 // The returned reader uses the store's shared blob set
@@ -34,6 +44,12 @@ func (s *Store) OpenDocument(ctx context.Context, manifest digest.Digest) (artif
 	if err != nil {
 		return nil, err
 	}
+
+	return s.openDocument(ctx, root)
+}
+
+// openDocument loads and validates an OCIDoc manifest from its root descriptor.
+func (s *Store) openDocument(ctx context.Context, root ocispec.Descriptor) (artifact.Reader, error) {
 	data, err := s.fetchMetadata(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("manifest: %w", err)
@@ -51,18 +67,6 @@ func (s *Store) OpenDocument(ctx context.Context, manifest digest.Digest) (artif
 	}
 
 	return &storeReader{manifest: &decoded, root: root, store: s}, nil
-}
-
-// storeReader implements artifact.Reader over one manifest in Store.
-type storeReader struct {
-	// manifest is the verified root manifest selected by OpenDocument.
-	manifest *ocispec.Manifest
-
-	// store provides lazy config and component reads.
-	store *Store
-
-	// root identifies manifest in the shared OCI content store.
-	root ocispec.Descriptor
 }
 
 // Close implements artifact.Reader. Store readers do not retain resources.
@@ -85,7 +89,7 @@ func (r *storeReader) OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io
 		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 
-	rc, err := r.store.oci.Fetch(ctx, desc)
+	rc, err := r.store.ociStore().Fetch(ctx, desc)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +98,7 @@ func (r *storeReader) OpenBlob(ctx context.Context, desc ocispec.Descriptor) (io
 		_ = rc.Close()
 		return nil, err
 	}
+
 	return verified, nil
 }
 
@@ -167,14 +172,9 @@ func (r *storeReader) OpenComponent(ctx context.Context, component spec.Componen
 
 // rootDescriptor finds manifest's complete descriptor in the store OCI index.
 func (s *Store) rootDescriptor(manifest digest.Digest) (ocispec.Descriptor, error) {
-	data, err := os.ReadFile(filepath.Join(s.root, ocispec.ImageIndexFile))
+	index, err := s.readIndex()
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("read %s: %w", ocispec.ImageIndexFile, err)
-	}
-
-	var index ocispec.Index
-	if err := json.Unmarshal(data, &index); err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("%w: parse %s: %v", ErrInvalid, ocispec.ImageIndexFile, err)
+		return ocispec.Descriptor{}, err
 	}
 	for _, candidate := range index.Manifests {
 		if candidate.Digest == manifest {
@@ -194,7 +194,7 @@ func (s *Store) fetchMetadata(ctx context.Context, desc ocispec.Descriptor) ([]b
 		return nil, fmt.Errorf("%w: metadata blob size %d exceeds limit %d", ErrInvalid, desc.Size, ociblob.MaxMetadataSize)
 	}
 
-	rc, err := s.oci.Fetch(ctx, desc)
+	rc, err := s.ociStore().Fetch(ctx, desc)
 	if err != nil {
 		return nil, err
 	}
@@ -219,10 +219,12 @@ func validateManifestDescriptors(manifest *ocispec.Manifest) error {
 	if err := ociblob.Validate(manifest.Config); err != nil {
 		return fmt.Errorf("%w: config descriptor: %v", ErrInvalid, err)
 	}
+
 	for i, layer := range manifest.Layers {
 		if err := ociblob.Validate(layer); err != nil {
 			return fmt.Errorf("%w: layer %d descriptor: %v", ErrInvalid, i, err)
 		}
 	}
+
 	return nil
 }

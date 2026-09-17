@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/opencontainers/go-digest"
-	"oras.land/oras-go/v2/errdef"
 
 	"github.com/ocidoc/ocidoc-go/internal/ociblob"
 )
@@ -31,16 +30,16 @@ func (s *Store) Remove(ctx context.Context, manifest digest.Digest) error {
 		if err != nil {
 			return err
 		}
-		if _, ok := cat.Documents[manifest]; !ok {
-			return fmt.Errorf("%w: manifest %s", errdef.ErrNotFound, manifest)
+
+		if err := s.ociStore().Delete(ctx, root); err != nil {
+			return fmt.Errorf("delete manifest %s: %w", manifest, err)
 		}
 
-		delete(cat.Documents, manifest)
-		if err := s.saveCatalog(cat); err != nil {
-			return err
-		}
-		if err := s.oci.Delete(ctx, root); err != nil {
-			return fmt.Errorf("delete manifest %s: %w", manifest, err)
+		if _, ok := cat.Documents[manifest]; ok {
+			delete(cat.Documents, manifest)
+			if err := s.saveCatalog(cat); err != nil {
+				return fmt.Errorf("remove catalog record %s: %w", manifest, err)
+			}
 		}
 
 		return nil

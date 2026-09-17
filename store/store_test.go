@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,6 +133,29 @@ func TestDocumentsRejectsMissingCatalogVersion(t *testing.T) {
 	}
 }
 
+func TestDocumentsUsesIndexWhenCatalogIsMissing(t *testing.T) {
+	root := t.TempDir()
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	committed, err := s.Commit(t.Context(), buildTestArtifact(t, "# indexed"), Origin{Source: "build"})
+	if err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if err := os.Remove(filepath.Join(root, catalogFileName)); err != nil {
+		t.Fatalf("Remove catalog: %v", err)
+	}
+
+	docs, err := s.Documents()
+	if err != nil {
+		t.Fatalf("Documents: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Manifest != committed.Manifest {
+		t.Fatalf("documents from index = %+v", docs)
+	}
+}
+
 func TestCommitFailsWhenCatalogLockedByAnotherHolder(t *testing.T) {
 	root := t.TempDir()
 
@@ -154,6 +178,157 @@ func TestCommitFailsWhenCatalogLockedByAnotherHolder(t *testing.T) {
 
 	if _, err := s.Commit(ctx, reader, Origin{Source: "build"}); !errors.Is(err, ErrLocked) {
 		t.Fatalf("Commit: got %v, want errors.Is(err, ErrLocked)", err)
+	}
+}
+
+func TestOpenStoresSerializeCommitsAcrossHandles(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "store")
+
+	first, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open first: %v", err)
+	}
+	second, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open second: %v", err)
+	}
+
+	firstArtifact := buildTestArtifact(t, "# first")
+	secondArtifact := buildTestArtifact(t, "# second")
+	firstRoot := mustRoot(t, firstArtifact).Digest
+	secondRoot := mustRoot(t, secondArtifact).Digest
+
+	if _, err := first.Commit(t.Context(), firstArtifact, Origin{Source: "build"}); err != nil {
+		t.Fatalf("first Commit: %v", err)
+	}
+	if _, err := second.Commit(t.Context(), secondArtifact, Origin{Source: "build"}); err != nil {
+		t.Fatalf("second Commit: %v", err)
+	}
+
+	index, err := first.readIndex()
+	if err != nil {
+		t.Fatalf("readIndex: %v", err)
+	}
+	got := make(map[digest.Digest]bool, len(index.Manifests))
+	for _, manifest := range index.Manifests {
+		got[manifest.Digest] = true
+	}
+	if !got[firstRoot] || !got[secondRoot] {
+		t.Fatalf("index roots = %v, want %s and %s", got, firstRoot, secondRoot)
+	}
+
+	docs, err := first.Documents()
+	if err != nil {
+		t.Fatalf("Documents: %v", err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("catalog documents = %d, want 2: %+v", len(docs), docs)
+	}
+}
+
+func TestVerifyRepairRebuildsMalformedCatalog(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	artifactReader := buildTestArtifact(t, "# repair")
+	committed, err := s.Commit(t.Context(), artifactReader, Origin{Source: "build"})
+	if err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, catalogFileName), []byte("not json"), 0o600); err != nil {
+		t.Fatalf("WriteFile catalog: %v", err)
+	}
+
+	result, err := s.Verify(t.Context(), true, true)
+	if err != nil {
+		t.Fatalf("Verify repair: %v", err)
+	}
+	if !result.Valid {
+		t.Fatalf("Verify repair is invalid: %+v", result)
+	}
+
+	docs, err := s.Documents()
+	if err != nil {
+		t.Fatalf("Documents after repair: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Manifest != committed.Manifest {
+		t.Fatalf("repaired documents = %+v", docs)
+	}
+}
+
+func TestStoreSerializesConcurrentCommitsOnOneHandle(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	first := buildTestArtifact(t, "# first")
+	second := buildTestArtifact(t, "# second")
+	want := []digest.Digest{mustRoot(t, first).Digest, mustRoot(t, second).Digest}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for _, source := range []artifact.Reader{first, second} {
+		wg.Add(1)
+		go func(source artifact.Reader) {
+			defer wg.Done()
+			_, commitErr := s.Commit(t.Context(), source, Origin{Source: "build"})
+			errs <- commitErr
+		}(source)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent Commit: %v", err)
+		}
+	}
+
+	index, err := s.readIndex()
+	if err != nil {
+		t.Fatalf("readIndex: %v", err)
+	}
+	got := make(map[digest.Digest]bool, len(index.Manifests))
+	for _, manifest := range index.Manifests {
+		got[manifest.Digest] = true
+	}
+	for _, root := range want {
+		if !got[root] {
+			t.Errorf("index is missing committed root %s", root)
+		}
+	}
+}
+
+func TestVerifyRepairDoesNotOverwriteFutureCatalog(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := s.Commit(t.Context(), buildTestArtifact(t, "# future"), Origin{Source: "build"}); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	data := []byte(`{"version":999,"documents":{}}`)
+	path := filepath.Join(root, catalogFileName)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile catalog: %v", err)
+	}
+
+	if _, err := s.Verify(t.Context(), true, true); err == nil {
+		t.Fatal("Verify repair succeeded for a future catalog version")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile catalog: %v", err)
+	}
+	if string(got) != string(data) {
+		t.Fatalf("future catalog changed to %q", got)
 	}
 }
 

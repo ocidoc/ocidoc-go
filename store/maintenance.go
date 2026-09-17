@@ -7,8 +7,8 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -16,14 +16,15 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/ocidoc/ocidoc-go/artifact"
-	"github.com/ocidoc/ocidoc-go/internal/ociblob"
 )
 
 // Verification describes the structural state of a local store.
 type Verification struct {
-
 	// Issues contains structural or catalog problems found during verification.
 	Issues []string
+
+	// Repaired contains problems fixed while rebuilding derived store metadata.
+	Repaired []string
 
 	// Documents is the number of root manifests found in the OCI index.
 	Documents int
@@ -55,9 +56,23 @@ func (s *Store) Verify(ctx context.Context, repair, metadataOnly bool) (Verifica
 		if err != nil {
 			return err
 		}
+
+		catalogPath := filepath.Join(s.root, catalogFileName)
+		_, statErr := os.Stat(catalogPath)
+		catalogMissing := errors.Is(statErr, os.ErrNotExist)
+		if statErr != nil && !catalogMissing {
+			return fmt.Errorf("stat %s: %w", catalogFileName, statErr)
+		}
+
 		catalog, err := s.loadCatalog()
 		if err != nil {
-			return err
+			if !repair || !errors.Is(err, ErrInvalid) || errors.Is(err, errCatalogFutureVersion) {
+				return err
+			}
+			catalog = emptyCatalog()
+			result.Repaired = append(result.Repaired, "rebuilt malformed "+catalogFileName)
+		} else if repair && catalogMissing {
+			result.Repaired = append(result.Repaired, "rebuilt missing "+catalogFileName)
 		}
 
 		result.Valid = true
@@ -66,7 +81,7 @@ func (s *Store) Verify(ctx context.Context, repair, metadataOnly bool) (Verifica
 		repaired := &catalogFile{Version: catalogVersion, Documents: make(map[digest.Digest]documentRecord)}
 
 		for _, root := range index.Manifests {
-			reader, openErr := s.OpenDocument(ctx, root.Digest)
+			reader, openErr := s.openDocument(ctx, root)
 			if openErr != nil {
 				result.addIssue("open %s: %v", root.Digest, openErr)
 				continue
@@ -92,16 +107,29 @@ func (s *Store) Verify(ctx context.Context, repair, metadataOnly bool) (Verifica
 
 			seen[root.Digest] = true
 			if _, ok := catalog.Documents[root.Digest]; !ok {
-				result.addIssue("catalog is missing %s", root.Digest)
+				if repair {
+					result.Repaired = append(result.Repaired, fmt.Sprintf("added catalog record %s", root.Digest))
+				} else {
+					result.addIssue("catalog is missing %s", root.Digest)
+				}
 			}
 			if repair {
-				repaired.Documents[root.Digest] = s.repairedRecord(ctx, root.Digest, catalog.Documents[root.Digest])
+				manifest, manifestErr := reader.Manifest(ctx)
+				if manifestErr != nil {
+					result.addIssue("read manifest %s for repair: %v", root.Digest, manifestErr)
+					continue
+				}
+				repaired.Documents[root.Digest] = repairedRecord(manifest, catalog.Documents[root.Digest])
 			}
 		}
 
 		for manifest := range catalog.Documents {
 			if !seen[manifest] {
-				result.addIssue("catalog references missing root %s", manifest)
+				if repair {
+					result.Repaired = append(result.Repaired, fmt.Sprintf("removed catalog record for missing root %s", manifest))
+				} else {
+					result.addIssue("catalog references missing root %s", manifest)
+				}
 			}
 		}
 
@@ -140,7 +168,7 @@ func (s *Store) Prune(ctx context.Context, dryRun bool) (PruneResult, error) {
 		}
 
 		if !dryRun {
-			if err := s.oci.GC(ctx); err != nil {
+			if err := s.ociStore().GC(ctx); err != nil {
 				return fmt.Errorf("garbage-collect store: %w", err)
 			}
 		}
@@ -163,7 +191,7 @@ func (v *Verification) addIssue(format string, args ...any) {
 
 // readIndex loads the store's authoritative OCI image index.
 func (s *Store) readIndex() (ocispec.Index, error) {
-	data, err := os.ReadFile(filepath.Join(s.root, ocispec.ImageIndexFile))
+	data, err := readStoreMetadata(filepath.Join(s.root, ocispec.ImageIndexFile), ocispec.ImageIndexFile)
 	if err != nil {
 		return ocispec.Index{}, fmt.Errorf("read %s: %w", ocispec.ImageIndexFile, err)
 	}
@@ -178,21 +206,10 @@ func (s *Store) readIndex() (ocispec.Index, error) {
 
 // repairedRecord derives manifest-owned catalog fields
 // while preserving observations from the previous catalog record.
-func (s *Store) repairedRecord(ctx context.Context, manifest digest.Digest, previous documentRecord) documentRecord {
-	reader, err := s.OpenDocument(ctx, manifest)
-	if err != nil {
-		return previous
-	}
-
-	defer reader.Close() //nolint:errcheck // repair result is best effort after verification.
-	value, err := reader.Manifest(ctx)
-	if err != nil {
-		return previous
-	}
-
+func repairedRecord(manifest *ocispec.Manifest, previous documentRecord) documentRecord {
 	previous.Subject = ""
-	if value.Subject != nil {
-		previous.Subject = value.Subject.Digest
+	if manifest.Subject != nil {
+		previous.Subject = manifest.Subject.Digest
 	}
 
 	return previous
@@ -204,7 +221,7 @@ func (s *Store) reachableBlobs(ctx context.Context, index ocispec.Index) (map[di
 	reachable := make(map[digest.Digest]bool)
 	for _, root := range index.Manifests {
 		reachable[root.Digest] = true
-		data, err := s.readBlob(ctx, root)
+		data, err := s.fetchMetadata(ctx, root)
 		if err != nil {
 			return nil, fmt.Errorf("read root %s: %w", root.Digest, err)
 		}
@@ -221,30 +238,6 @@ func (s *Store) reachableBlobs(ctx context.Context, index ocispec.Index) (map[di
 	}
 
 	return reachable, nil
-}
-
-// readBlob fetches and verifies one descriptor from the local OCI store.
-func (s *Store) readBlob(ctx context.Context, descriptor ocispec.Descriptor) ([]byte, error) {
-	if err := ociblob.Validate(descriptor); err != nil {
-		return nil, err
-	}
-
-	rc, err := s.oci.Fetch(ctx, descriptor)
-	if err != nil {
-		return nil, err
-	}
-	defer rc.Close() //nolint:errcheck // read result determines success.
-
-	data, err := io.ReadAll(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := ociblob.Verify(descriptor, data); err != nil {
-		return nil, err
-	}
-
-	return data, nil
 }
 
 // measureUnreachable counts blob files not reachable from the OCI index.

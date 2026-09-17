@@ -22,9 +22,9 @@ type Temp struct {
 	done bool
 }
 
-// CreateTemp creates a temporary file in dir for later renaming into
-// place. dir must be the destination's own directory so the later Rename
-// is same-filesystem and therefore atomic.
+// CreateTemp creates a temporary file in dir for later renaming into place.
+// dir must be the destination's own directory
+// so the later Rename is same-filesystem and therefore atomic.
 func CreateTemp(dir string) (*Temp, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("create directory %q: %w", dir, err)
@@ -43,14 +43,14 @@ func (t *Temp) File() *os.File {
 	return t.f
 }
 
-// Rename closes the temp file and atomically renames it to path,
-// overwriting any existing file there. Cleanup after a successful Rename is a no-op.
+// Rename closes the temp file and publishes it at path.
+// Cleanup after a successful Rename is a no-op.
 func (t *Temp) Rename(path string) error {
 	if err := t.f.Close(); err != nil {
 		return fmt.Errorf("close temp file %q: %w", t.f.Name(), err)
 	}
-	if err := os.Rename(t.f.Name(), path); err != nil {
-		return fmt.Errorf("rename %q to %q: %w", t.f.Name(), path, err)
+	if err := publish(t.f.Name(), path); err != nil {
+		return err
 	}
 	t.done = true
 
@@ -67,16 +67,9 @@ func (t *Temp) Cleanup() {
 	_ = os.Remove(t.f.Name())
 }
 
-// WriteFile atomically writes path's content by calling write with a temporary file's writer,
-// then renaming the temp file into place.
-// If overwrite is false and path already exists,
-// WriteFile fails without calling write's side effects on the destination -
-// an existing file is left untouched.
-//
-// os.Rename does not portably support "fail if destination exists" (notably on Windows),
-// so the exclusivity check is a separate O_EXCL probe immediately before the rename;
-// a concurrent writer could still race between the probe and the rename,
-// same as any other check-then-act use of a shared path.
+// WriteFile writes path's content to a temporary file
+// and publishes it only after the callback and temporary-file close both succeed.
+// If overwrite is false, publication fails without replacing an existing path.
 func WriteFile(path string, overwrite bool, write func(io.Writer) error) error {
 	tmp, err := CreateTemp(filepath.Dir(path))
 	if err != nil {
@@ -88,15 +81,22 @@ func WriteFile(path string, overwrite bool, write func(io.Writer) error) error {
 		return err
 	}
 
-	if !overwrite {
-		probe, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			return fmt.Errorf("open output path %q: %w", path, err)
-		}
-		if err := probe.Close(); err != nil {
-			return fmt.Errorf("close output path %q: %w", path, err)
-		}
+	if overwrite {
+		return tmp.Rename(path)
 	}
 
-	return tmp.Rename(path)
+	return tmp.renameNoReplace(path)
+}
+
+// renameNoReplace publishes the temporary file without replacing an existing path.
+func (t *Temp) renameNoReplace(path string) error {
+	if err := t.f.Close(); err != nil {
+		return fmt.Errorf("close temp file %q: %w", t.f.Name(), err)
+	}
+	if err := publishNoReplace(t.f.Name(), path); err != nil {
+		return err
+	}
+	t.done = true
+
+	return nil
 }

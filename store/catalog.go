@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,6 +27,13 @@ const catalogVersion = 1
 
 // catalogFileName is the rebuildable local metadata index stored at the store root.
 const catalogFileName = "store.json"
+
+// maxStoreMetadataSize bounds rebuildable store metadata files read from disk.
+// The limit protects catalog loading from oversized or malicious metadata
+// and is enforced both before opening the file and during the bounded read.
+const maxStoreMetadataSize int64 = 16 << 20
+
+var errCatalogFutureVersion = errors.New("catalog version is newer than this implementation")
 
 // Document is one locally-known OCIDoc document root and its catalog observations.
 // Every field is derived from OCI content the store already has except Origins and UpdatedAt,
@@ -79,7 +87,7 @@ type catalogFile struct {
 // from OCI content already in the store.
 func (s *Store) loadCatalog() (*catalogFile, error) {
 	//nolint:gosec // path built from the store's own root, not external input.
-	data, err := os.ReadFile(filepath.Join(s.root, catalogFileName))
+	data, err := readStoreMetadata(filepath.Join(s.root, catalogFileName), catalogFileName)
 	if errors.Is(err, os.ErrNotExist) {
 		return &catalogFile{Version: catalogVersion, Documents: map[digest.Digest]documentRecord{}}, nil
 	}
@@ -95,6 +103,12 @@ func (s *Store) loadCatalog() (*catalogFile, error) {
 	}
 
 	if cat.Version != catalogVersion {
+		if cat.Version > catalogVersion {
+			return nil, fmt.Errorf(
+				"%w: %w: unsupported %s version %d, want %d",
+				ErrInvalid, errCatalogFutureVersion, catalogFileName, cat.Version, catalogVersion,
+			)
+		}
 		return nil, fmt.Errorf(
 			"%w: unsupported %s version %d, want %d",
 			ErrInvalid, catalogFileName, cat.Version, catalogVersion,
@@ -106,6 +120,41 @@ func (s *Store) loadCatalog() (*catalogFile, error) {
 	}
 
 	return &cat, nil
+}
+
+// readStoreMetadata reads and size-checks one store metadata file.
+func readStoreMetadata(path, name string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", name)
+	}
+	if info.Size() > maxStoreMetadataSize {
+		return nil, fmt.Errorf("%w: %s size %d exceeds limit %d", ErrInvalid, name, info.Size(), maxStoreMetadataSize)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close() //nolint:errcheck // read result determines success.
+
+	data, err := io.ReadAll(io.LimitReader(f, maxStoreMetadataSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxStoreMetadataSize {
+		return nil, fmt.Errorf("%w: %s exceeds limit %d", ErrInvalid, name, maxStoreMetadataSize)
+	}
+
+	return data, nil
+}
+
+// emptyCatalog returns a new empty catalog with the current format version.
+func emptyCatalog() *catalogFile {
+	return &catalogFile{Version: catalogVersion, Documents: map[digest.Digest]documentRecord{}}
 }
 
 // saveCatalog writes cat to store.json via a temporary file in the store's own tmp/ directory,
@@ -134,17 +183,24 @@ func (s *Store) saveCatalog(cat *catalogFile) error {
 	return nil
 }
 
-// Documents returns every locally-known document root, sorted by manifest digest.
+// Documents returns every root present in the authoritative OCI index,
+// joined with any matching catalog observations. Catalog-only records are ignored.
 func (s *Store) Documents() ([]Document, error) {
+	index, err := s.readIndex()
+	if err != nil {
+		return nil, err
+	}
+
 	cat, err := s.loadCatalog()
 	if err != nil {
 		return nil, err
 	}
 
-	docs := make([]Document, 0, len(cat.Documents))
-	for manifestDigest, rec := range cat.Documents {
+	docs := make([]Document, 0, len(index.Manifests))
+	for _, root := range index.Manifests {
+		rec := cat.Documents[root.Digest]
 		docs = append(docs, Document{
-			Manifest:  manifestDigest,
+			Manifest:  root.Digest,
 			Subject:   rec.Subject,
 			Source:    rec.Source,
 			Origins:   rec.Origins,

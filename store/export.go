@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ocidoc/ocidoc-go/artifact"
+	"github.com/ocidoc/ocidoc-go/internal/atomicfile"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -23,4 +24,18 @@ func (s *Store) Export(ctx context.Context, manifest digest.Digest, dst io.Write
 	defer reader.Close() //nolint:errcheck // export result determines success.
 
 	return artifact.PackageReader(ctx, reader, dst, modTime)
+}
+
+// ExportFile exports one stored document through the SDK's safe file finalization path.
+// Existing destinations are preserved unless overwrite is true.
+func (s *Store) ExportFile(
+	ctx context.Context,
+	manifest digest.Digest,
+	path string,
+	overwrite bool,
+	modTime time.Time,
+) error {
+	return atomicfile.WriteFile(path, overwrite, func(dst io.Writer) error {
+		return s.Export(ctx, manifest, dst, modTime)
+	})
 }

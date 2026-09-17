@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -19,15 +20,16 @@ import (
 // Store is a persistent local OCIDoc content-addressed store:
 // an OCI Image Layout (blob storage, delegated to oras-go's content/oci.Store)
 // plus an OCIDoc-local catalog (store.json).
-type Store struct {
-	oci  *oci.Store
-	lock *flock.Flock
-	root string
+type Store struct { // betteralign:ignore lock and store fields are grouped by synchronization ownership.
+	oci    *oci.Store
+	lock   *flock.Flock
+	lockMu chan struct{}
+	root   string
+	ociMu  sync.RWMutex
 }
 
 // Open opens (creating if necessary) a local OCIDoc store rooted at path:
-// path's directory tree, the underlying OCI Image Layout
-// ("oci-layout", "index.json", "blobs/"),
+// path's directory tree, the underlying OCI Image Layout ("oci-layout", "index.json", "blobs/"),
 // and the store's own "locks/" and "tmp/" directories are all created if they do not already exist.
 func Open(path string) (*Store, error) {
 	root, err := filepath.Abs(path)
@@ -44,19 +46,53 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("create store tmp directory: %w", err)
 	}
 
-	ociStore, err := oci.New(root)
+	ociStore, err := openOCIStore(root)
 	if err != nil {
 		return nil, fmt.Errorf("open OCI layout at %s: %w", root, err)
 	}
+
+	return &Store{
+		root:   root,
+		oci:    ociStore,
+		lock:   flock.New(filepath.Join(locksDir, "catalog.lock")),
+		lockMu: make(chan struct{}, 1),
+	}, nil
+}
+
+// openOCIStore opens the OCI content store without automatic garbage collection.
+func openOCIStore(root string) (*oci.Store, error) {
+	ociStore, err := oci.New(root)
+	if err != nil {
+		return nil, err
+	}
+
 	// Keep deletion separate from garbage collection. Remove forgets one root;
 	// Prune is the explicit operation that reclaims blobs no longer reachable from the store index.
 	ociStore.AutoGC = false
 
-	return &Store{
-		root: root,
-		oci:  ociStore,
-		lock: flock.New(filepath.Join(locksDir, "catalog.lock")),
-	}, nil
+	return ociStore, nil
+}
+
+// ociStore returns the current OCI content store under a read lock.
+func (s *Store) ociStore() *oci.Store {
+	s.ociMu.RLock()
+	defer s.ociMu.RUnlock()
+
+	return s.oci
+}
+
+// refreshOCIStore reopens the OCI content store after an external change.
+func (s *Store) refreshOCIStore() error {
+	ociStore, err := openOCIStore(s.root)
+	if err != nil {
+		return fmt.Errorf("refresh OCI layout: %w", err)
+	}
+
+	s.ociMu.Lock()
+	s.oci = ociStore
+	s.ociMu.Unlock()
+
+	return nil
 }
 
 // Root returns the store's absolute root path.
@@ -76,6 +112,13 @@ func (s *Store) Root() string {
 // (not locked=false, err=nil), so that is the case classified as ErrLocked here;
 // any other error is a genuine lock-file I/O failure, left generically wrapped.
 func (s *Store) withCatalogLock(ctx context.Context, fn func() error) error {
+	select {
+	case s.lockMu <- struct{}{}:
+		defer func() { <-s.lockMu }()
+	case <-ctx.Done():
+		return fmt.Errorf("%w: %w", ErrLocked, ctx.Err())
+	}
+
 	locked, err := s.lock.TryLockContext(ctx, 50*time.Millisecond)
 	switch {
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
@@ -87,8 +130,16 @@ func (s *Store) withCatalogLock(ctx context.Context, fn func() error) error {
 	case !locked:
 		return fmt.Errorf("%w: acquire store catalog lock", ErrLocked)
 	}
+
 	//nolint:errcheck // best-effort unlock; a stuck lock is the real problem, not this return value.
 	defer s.lock.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := s.refreshOCIStore(); err != nil {
+		return err
+	}
 
 	return fn()
 }
