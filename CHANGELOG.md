@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
-## [Unreleased]
+## [0.3.0][] - 2026-09-17
 
 ### Added
 
@@ -44,8 +44,10 @@ and this project adheres to [Semantic Versioning][].
   and removing partial files after failed extraction.
 * Local-store pruning now preserves blobs shared by a reachable document,
   and oversized OCI index metadata is rejected before store initialization.
-* zstd component streams now enforce explicit decoder memory and window limits
-  with single-flight decoding.
+* zstd component streams now enforce explicit decoder memory
+  and window limits with single-flight decoding.
+
+[0.3.0]: https://github.com/ocidoc/ocidoc-go/compare/v0.2.0...v0.3.0
 
 ## [0.2.0][] - 2026-08-17
 
