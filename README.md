@@ -1,11 +1,24 @@
 # ocidoc-go
 
 `ocidoc-go` is the reference Go SDK for building, reading,
-verifying and publishing [OCIDoc](https://ocidoc.org) documentation artifacts
+verifying and publishing [OCIDoc][ocidoc.org] documentation artifacts
 in OCI registries and OCI Image Layouts.
 
-The current artifact format is `v1beta`. The module is pre-1.0;
+The current artifact format is `v1beta`.
+The module is pre-1.0;
 public APIs and the format may change before OCIDoc `v1` is frozen.
+
+## Configuration reference
+
+Build configuration defines how source-tree files
+are grouped into components, how entrypoints and locales are resolved,
+and which build settings are used.
+See the [Build config spec][] and its [Build config JSON Schema][].
+
+Artifact configuration describes the metadata
+stored inside a built OCIDoc artifact,
+including its document identity, components, files and locales.
+See the [Artifact config spec][] and its [Artifact config JSON Schema][].
 
 ## Install
 
@@ -94,4 +107,14 @@ and does not expose ORAS types in its public API.
 
 The full format specification,
 CLI documentation and generated configuration schema reference
-are published at [ocidoc.org](https://ocidoc.org).
+are published at [ocidoc.org][].
+
+<!-- links -->
+
+[ocidoc.org]: https://ocidoc.org
+
+[Build config spec]: docs/build-config-v1beta.md
+[Build config JSON Schema]: schema/build-config-v1beta.json
+
+[Artifact config spec]: docs/artifact-config-v1beta.md
+[Artifact config JSON Schema]: schema/artifact-config-v1beta.json
