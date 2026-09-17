@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2/content/oci"
 )
 
@@ -44,6 +45,14 @@ func Open(path string) (*Store, error) {
 
 	if err := os.MkdirAll(filepath.Join(root, "tmp"), 0o750); err != nil {
 		return nil, fmt.Errorf("create store tmp directory: %w", err)
+	}
+
+	if _, err := readStoreMetadata(
+		filepath.Join(root, ocispec.ImageIndexFile),
+		ocispec.ImageIndexFile,
+	); err != nil &&
+		!errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("validate %s before opening OCI store: %w", ocispec.ImageIndexFile, err)
 	}
 
 	ociStore, err := openOCIStore(root)

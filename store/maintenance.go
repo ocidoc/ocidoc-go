@@ -168,8 +168,8 @@ func (s *Store) Prune(ctx context.Context, dryRun bool) (PruneResult, error) {
 		}
 
 		if !dryRun {
-			if err := s.ociStore().GC(ctx); err != nil {
-				return fmt.Errorf("garbage-collect store: %w", err)
+			if err := s.removeUnreachable(ctx, reachable); err != nil {
+				return fmt.Errorf("remove unreachable blobs: %w", err)
 			}
 		}
 
@@ -181,6 +181,48 @@ func (s *Store) Prune(ctx context.Context, dryRun bool) (PruneResult, error) {
 	}
 
 	return result, nil
+}
+
+// removeUnreachable deletes blob files not reachable from the authoritative
+// OCIDoc index. The ORAS store's graph cannot be used here because digest-only
+// manifest references are valid OCIDoc roots but are not named OCI tags.
+func (s *Store) removeUnreachable(ctx context.Context, reachable map[digest.Digest]bool) error {
+	blobsPath := filepath.Join(s.root, "blobs")
+	blobsRoot, err := os.OpenRoot(blobsPath)
+	if err != nil {
+		return fmt.Errorf("open blob root: %w", err)
+	}
+	defer blobsRoot.Close() //nolint:errcheck // the walk result is the operation's result.
+
+	return filepath.WalkDir(blobsPath, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+
+		digestValue, err := digest.Parse(filepath.Base(filepath.Dir(path)) + ":" + filepath.Base(path))
+		if err != nil {
+			return fmt.Errorf("parse blob path %q: %w", path, err)
+		}
+		if reachable[digestValue] {
+			return nil
+		}
+
+		relative, err := filepath.Rel(blobsPath, path)
+		if err != nil {
+			return fmt.Errorf("resolve blob path %q: %w", path, err)
+		}
+		if err := blobsRoot.Remove(relative); err != nil {
+			return fmt.Errorf("remove %s: %w", path, err)
+		}
+
+		return nil
+	})
 }
 
 // addIssue records a verification failure and marks the result invalid.

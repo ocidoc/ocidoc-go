@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning][].
 * Hardened archive extraction and component streams by draining
   and verifying trailing data
   and removing partial files after failed extraction.
+* Local-store pruning now preserves blobs shared by a reachable document,
+  and oversized OCI index metadata is rejected before store initialization.
+* zstd component streams now enforce explicit decoder memory and window limits
+  with single-flight decoding.
 
 ## [0.2.0][] - 2026-08-17
 

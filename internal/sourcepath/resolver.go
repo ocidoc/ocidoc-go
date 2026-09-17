@@ -7,6 +7,7 @@
 package sourcepath
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -141,28 +142,47 @@ func (r *Resolver) ResolveReference(referrer, target string) (Resolution, error)
 // Symlinked directories are traversed while ancestor cycles are rejected;
 // symlink entries themselves are never emitted.
 func (r *Resolver) Walk(visit func(File) error) error {
+	return r.WalkContext(context.Background(), visit)
+}
+
+// WalkContext visits every logical regular file under the root in deterministic
+// order while honoring ctx between filesystem operations.
+func (r *Resolver) WalkContext(ctx context.Context, visit func(File) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	rootInfo, err := os.Stat(r.root)
 	if err != nil {
 		return fmt.Errorf("stat source root: %w", err)
 	}
 
-	return r.walkDirectory("", r.root, []fs.FileInfo{rootInfo}, visit)
+	return r.walkDirectory(ctx, "", r.root, []fs.FileInfo{rootInfo}, visit)
 }
 
 // walkDirectory traverses sourceDir and maps its entries beneath bundleDir.
 // ancestors contains resolved directories in the active traversal path for symlink-cycle detection.
 func (r *Resolver) walkDirectory(
+	ctx context.Context,
 	bundleDir string,
 	sourceDir string,
 	ancestors []fs.FileInfo,
 	visit func(File) error,
 ) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	entries, err := os.ReadDir(sourceDir)
 	if err != nil {
 		return fmt.Errorf("read source directory %q: %w", bundleDir, err)
 	}
 
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		bundlePath := path.Join(bundleDir, entry.Name())
 		resolved, err := r.Resolve(bundlePath)
 		if err != nil {
@@ -174,6 +194,9 @@ func (r *Resolver) walkDirectory(
 			if err := visit(resolved.File); err != nil {
 				return err
 			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 
 		case KindDirectory:
 			info, err := os.Stat(resolved.File.SourcePath)
@@ -183,7 +206,7 @@ func (r *Resolver) walkDirectory(
 			if sameAsAny(info, ancestors) {
 				return fmt.Errorf("%w: source directory %q forms a symlink cycle", spec.ErrInvalid, bundlePath)
 			}
-			if err := r.walkDirectory(bundlePath, resolved.File.SourcePath, append(ancestors, info), visit); err != nil {
+			if err := r.walkDirectory(ctx, bundlePath, resolved.File.SourcePath, append(ancestors, info), visit); err != nil {
 				return err
 			}
 

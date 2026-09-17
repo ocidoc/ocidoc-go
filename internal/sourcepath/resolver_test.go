@@ -5,6 +5,7 @@
 package sourcepath
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -102,5 +103,27 @@ func TestWalkTraversesDirectorySymlinkAndRejectsCycle(t *testing.T) {
 	}
 	if err := r.Walk(func(File) error { return nil }); !errors.Is(err, spec.ErrInvalid) {
 		t.Fatalf("Walk cycle error = %v, want spec.ErrInvalid", err)
+	}
+}
+
+func TestWalkContextStopsDuringTraversal(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("readme"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	r, err := New(root)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = r.WalkContext(ctx, func(File) error {
+		cancel()
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("WalkContext error = %v, want context.Canceled", err)
 	}
 }

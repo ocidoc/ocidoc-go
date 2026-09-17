@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
@@ -107,6 +109,44 @@ func TestListDetectsCompressedBlobTailAfterTarEOF(t *testing.T) {
 
 	if _, err := List(context.Background(), reader, ListOptions{}); err == nil {
 		t.Fatal("List accepted compressed bytes after the tar terminator")
+	} else if !errors.Is(err, spec.ErrVerification) {
+		t.Fatalf("List: expected digest verification error, got %v", err)
+	}
+}
+
+func TestListDetectsZstdBlobTailAfterTarEOF(t *testing.T) {
+	layoutDir, built := buildTestLayoutWithCompression(t, spec.CompressionZstd)
+	desc := built.ComponentDescriptors[spec.ComponentDocumentation]
+	blobFile := filepath.Join(layoutDir, "blobs", "sha256", desc.Digest.Encoded())
+
+	data, err := os.ReadFile(blobFile) //nolint:gosec // fixed test path.
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var tail bytes.Buffer
+	zstdWriter, err := zstd.NewWriter(&tail, zstd.WithEncoderConcurrency(1), zstd.WithEncoderCRC(false))
+	if err != nil {
+		t.Fatalf("zstd.NewWriter: %v", err)
+	}
+	if _, err := zstdWriter.Write([]byte("unexpected zstd tail")); err != nil {
+		t.Fatalf("zstd tail: %v", err)
+	}
+	if err := zstdWriter.Close(); err != nil {
+		t.Fatalf("close zstd tail: %v", err)
+	}
+	data = append(data, tail.Bytes()...)
+	if err := os.WriteFile(blobFile, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	reader, err := OpenLayout(layoutDir)
+	if err != nil {
+		t.Fatalf("OpenLayout: %v", err)
+	}
+	defer reader.Close() //nolint:errcheck // test cleanup.
+
+	if _, err := List(context.Background(), reader, ListOptions{}); err == nil {
+		t.Fatal("List accepted zstd bytes after the tar terminator")
 	} else if !errors.Is(err, spec.ErrVerification) {
 		t.Fatalf("List: expected digest verification error, got %v", err)
 	}

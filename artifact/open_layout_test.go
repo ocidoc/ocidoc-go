@@ -23,13 +23,21 @@ import (
 )
 
 func buildTestLayout(t *testing.T) (layoutDir string, built *AssembleResult) {
+	return buildTestLayoutWithCompression(t, spec.CompressionGzip)
+}
+
+func buildTestLayoutWithCompression(t *testing.T, compression spec.CompressionType) (layoutDir string, built *AssembleResult) {
 	t.Helper()
 
 	root := newLayoutFixture(t)
 	layoutDir = t.TempDir()
+	level := 6
 
 	_, built, err := BuildLayout(t.Context(), root, layoutDir, BuildLayoutOptions{
 		ModTime: time.Unix(1700000000, 0).UTC(),
+		Plan: PlanOptions{Settings: &spec.BuildSettings{
+			Compression: &spec.CompressionSettings{Type: compression, Level: &level},
+		}},
 	})
 	if err != nil {
 		t.Fatalf("BuildLayout: %v", err)

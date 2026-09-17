@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/ocidoc/ocidoc-go/spec"
 )
 
@@ -55,6 +57,23 @@ func TestNewReaderZstdRoundTrip(t *testing.T) {
 
 	if !bytes.Equal(got, content) {
 		t.Fatalf("got %q, want %q", got, content)
+	}
+}
+
+func TestNewReaderRejectsZstdWindowAboveLimit(t *testing.T) {
+	// Magic, non-single-segment frame header and a 1 GiB window descriptor.
+	// The decoder must reject the advertised window before allocating it.
+	compressed := []byte{0x28, 0xb5, 0x2f, 0xfd, 0x00, 0xa0}
+
+	r, err := NewReader(bytes.NewReader(compressed), spec.ComponentLayerZstd)
+	if err != nil {
+		t.Fatalf("NewReader: %v", err)
+	}
+	defer r.Close()
+
+	_, err = io.ReadAll(r)
+	if !errors.Is(err, zstd.ErrWindowSizeExceeded) {
+		t.Fatalf("expected zstd window limit error, got %v", err)
 	}
 }
 

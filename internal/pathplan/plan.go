@@ -67,7 +67,7 @@ func PlanContext(ctx context.Context, root string, matchers *Matchers) (Ownershi
 		return nil, err
 	}
 
-	walkErr := resolver.Walk(func(file sourcepath.File) error {
+	walkErr := resolver.WalkContext(ctx, func(file sourcepath.File) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

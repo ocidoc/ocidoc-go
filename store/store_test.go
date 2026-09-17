@@ -5,10 +5,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -56,6 +58,25 @@ func TestOpenIsIdempotent(t *testing.T) {
 
 	if _, err := Open(root); err != nil {
 		t.Fatalf("second Open: %v", err)
+	}
+}
+
+func TestOpenRejectsOversizedIndexBeforeOpeningOCIStore(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(root, ocispec.ImageLayoutFile), []byte(`{"imageLayoutVersion":"1.0.0"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile oci-layout: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(root, ocispec.ImageIndexFile),
+		make([]byte, maxStoreMetadataSize+1),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile index: %v", err)
+	}
+
+	if _, err := Open(root); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Open: got %v, want errors.Is(err, ErrInvalid)", err)
 	}
 }
 
@@ -223,6 +244,187 @@ func TestOpenStoresSerializeCommitsAcrossHandles(t *testing.T) {
 	}
 	if len(docs) != 2 {
 		t.Fatalf("catalog documents = %d, want 2: %+v", len(docs), docs)
+	}
+}
+
+func TestStoreCommitsSerializeAcrossProcesses(t *testing.T) {
+	if os.Getenv("OCIDOC_STORE_TEST_HELPER") == "1" {
+		runStoreCommitHelper(t)
+		return
+	}
+
+	root := filepath.Join(t.TempDir(), "store")
+	if _, err := Open(root); err != nil {
+		t.Fatalf("initialize store: %v", err)
+	}
+	syncDir := t.TempDir()
+	commands := make([]*exec.Cmd, 0, 2)
+
+	for _, id := range []string{"first", "second"} {
+		cmd := exec.Command(os.Args[0], "-test.run", "^TestStoreCommitsSerializeAcrossProcesses$")
+		cmd.Env = append(os.Environ(),
+			"OCIDOC_STORE_TEST_HELPER=1",
+			"OCIDOC_STORE_TEST_ROOT="+root,
+			"OCIDOC_STORE_TEST_SYNC="+syncDir,
+			"OCIDOC_STORE_TEST_ID="+id,
+		)
+		var output bytes.Buffer
+		cmd.Stdout = &output
+		cmd.Stderr = &output
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("start %s helper: %v", id, err)
+		}
+		commands = append(commands, cmd)
+		t.Cleanup(func() {
+			if cmd.ProcessState == nil {
+				_ = cmd.Process.Kill()
+			}
+		})
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		ready := true
+		for _, id := range []string{"first", "second"} {
+			if _, err := os.Stat(filepath.Join(syncDir, id+".ready")); err != nil {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for store helper processes")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if err := os.WriteFile(filepath.Join(syncDir, "start"), nil, 0o600); err != nil {
+		t.Fatalf("start helpers: %v", err)
+	}
+	for _, cmd := range commands {
+		if err := cmd.Wait(); err != nil {
+			t.Fatalf("store helper: %v", err)
+		}
+	}
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("open committed store: %v", err)
+	}
+	docs, err := s.Documents()
+	if err != nil {
+		t.Fatalf("Documents: %v", err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("got %d committed documents, want 2: %+v", len(docs), docs)
+	}
+}
+
+func runStoreCommitHelper(t *testing.T) {
+	root := os.Getenv("OCIDOC_STORE_TEST_ROOT")
+	syncDir := os.Getenv("OCIDOC_STORE_TEST_SYNC")
+	id := os.Getenv("OCIDOC_STORE_TEST_ID")
+	if root == "" || syncDir == "" || id == "" {
+		t.Fatal("store helper environment is incomplete")
+	}
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(syncDir, id+".ready"), nil, 0o600); err != nil {
+		t.Fatalf("signal ready: %v", err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(syncDir, "start")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for start signal")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if _, err := s.Commit(t.Context(), buildTestArtifact(t, "# "+id), Origin{Source: "build"}); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+}
+
+func TestPruneKeepsBlobsSharedByReachableDocuments(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	firstSource := buildTestArtifact(t, "# first")
+	secondSource := buildTestArtifact(t, "# second")
+	first, err := s.Commit(t.Context(), firstSource, Origin{Source: "build"})
+	if err != nil {
+		t.Fatalf("first Commit: %v", err)
+	}
+	second, err := s.Commit(t.Context(), secondSource, Origin{Source: "build"})
+	if err != nil {
+		t.Fatalf("second Commit: %v", err)
+	}
+
+	firstReader, err := s.OpenDocument(t.Context(), first.Manifest)
+	if err != nil {
+		t.Fatalf("OpenDocument first: %v", err)
+	}
+	firstManifest, err := firstReader.Manifest(t.Context())
+	if err != nil {
+		t.Fatalf("first Manifest: %v", err)
+	}
+	firstComponents, err := firstReader.Components(t.Context())
+	if err != nil {
+		t.Fatalf("first Components: %v", err)
+	}
+	if err := firstReader.Close(); err != nil {
+		t.Fatalf("close first reader: %v", err)
+	}
+
+	secondReader, err := s.OpenDocument(t.Context(), second.Manifest)
+	if err != nil {
+		t.Fatalf("OpenDocument second: %v", err)
+	}
+	secondManifest, err := secondReader.Manifest(t.Context())
+	if err != nil {
+		t.Fatalf("second Manifest: %v", err)
+	}
+	if err := secondReader.Close(); err != nil {
+		t.Fatalf("close second reader: %v", err)
+	}
+	if firstManifest.Config.Digest != secondManifest.Config.Digest {
+		t.Fatalf("test fixtures do not share config blob: %s != %s", firstManifest.Config.Digest, secondManifest.Config.Digest)
+	}
+	if len(firstComponents) != 1 {
+		t.Fatalf("got %d first components, want 1", len(firstComponents))
+	}
+
+	if err := s.Remove(t.Context(), first.Manifest); err != nil {
+		t.Fatalf("Remove first: %v", err)
+	}
+	if _, err := s.Prune(t.Context(), false); err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+
+	shared, err := s.oci.Exists(t.Context(), firstManifest.Config)
+	if err != nil {
+		t.Fatalf("Exists shared config: %v", err)
+	}
+	if !shared {
+		t.Fatal("Prune removed config blob still reachable from second document")
+	}
+	removed, err := s.oci.Exists(t.Context(), firstComponents[0].Descriptor)
+	if err != nil {
+		t.Fatalf("Exists removed component: %v", err)
+	}
+	if removed {
+		t.Fatal("Prune kept component blob reachable only from removed document")
 	}
 }
 
